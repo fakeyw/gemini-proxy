@@ -10,41 +10,30 @@ export { ApiKeyManager };
 
 /**
  * @description Handles the /hello route, returning a welcome HTML page.
+ * @param {Request} request - The incoming request.
  * @param {Env} env - The environment variables.
- * @returns {Response} - The response object.
+ * @returns {Promise<Response>} - The response object.
  */
-function handleHelloRequest(env: Env): Response {
-    const html = `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Welcome to the LLM API Proxy!</title>
-        <style>
-            body { font-family: sans-serif; line-height: 1.6; padding: 2em; background-color: #f4f4f4; color: #333; }
-            .container { max-width: 800px; margin: auto; background: #fff; padding: 2em; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
-            h1 { color: #007bff; }
-            code { background-color: #eee; padding: 0.2em 0.4em; border-radius: 3px; }
-        </style>
-</head>
-<body>
-    <div class="container">
-        <h1>👋 Welcome to Cloudflare Worker LLM API Proxy!</h1>
-        <p>This worker acts as a proxy for your configured LLM API (<code>${env.UPSTREAM_API_URL || 'Not Configured'}</code>).</p>
-            <p>It intelligently manages multiple API keys:</p>
-        <ul>
-            <li>Rotates available API keys provided via the <code>API_KEYS</code> secret.</li>
-            <li>Automatically marks keys as exhausted if the upstream API returns a 429 status code.</li>
-            <li>Resets the status of all keys daily at GMT+8 15:00 (UTC 07:00) via a scheduled task.</li>
-        </ul>
-        <p>To use the proxy, simply send your API requests to this worker's URL instead of directly to the LLM API URL.</p>
-        <hr>
-        <p><small>You are seeing this page because you visited the <code>/</code> endpoint.</small></p>
-    </div>
-</body>
-</html>
-`;
+async function handleHelloRequest(request: Request, env: Env): Promise<Response> {
+    console.log('env.ASSETS:', env.ASSETS);
+    let htmlTemplate = "";
+    try {
+        const helloHtmlUrl = new URL('/hello.html', request.url);
+        const helloHtmlRequest = new Request(helloHtmlUrl.toString(), { method: 'GET' });
+        const assetResponse = await env.ASSETS.fetch(helloHtmlRequest);
+
+        if (!assetResponse.ok) {
+            console.error(`Error fetching hello.html template from ASSETS: Status ${assetResponse.status}`);
+            return new Response('Error fetching hello.html template from ASSETS', { status: assetResponse.status });
+        }
+        htmlTemplate = await assetResponse.text();
+
+    } catch (e: any) {
+        console.error('Error fetching or processing hello.html template from ASSETS:', e);
+        return new Response(`Error processing hello.html: ${e.message}\n${e.stack}`, { status: 500 });
+    }
+    const html = htmlTemplate.replace('${UPSTREAM_API_URL}', env.UPSTREAM_API_URL || 'Not Configured');
+
     return new Response(html, {
         headers: { 'Content-Type': 'text/html; charset=utf-8' },
     });
@@ -150,7 +139,7 @@ async function handleApiProxy(request: Request, env: Env, ctx: ExecutionContext)
             apiKey = await getApiKey(managerStub);
         } catch (error: any) {
             // Handle errors from getApiKey (communication, all keys exhausted, invalid response)
-            const status = error.message.includes("所有 API key") ? 429 : 500;
+            const status = error.message.includes("all API key") ? 429 : 500;
             return new Response(error.message, { status });
         }
 
@@ -160,8 +149,8 @@ async function handleApiProxy(request: Request, env: Env, ctx: ExecutionContext)
             if (upstreamResponse.status === 429) {
                 handleUpstream429(apiKey, managerStub, ctx);
                 console.log(`Retrying request... (attempt ${retries + 1}/${maxRetries})`);
-            // Success or non-429 error from upstream
-            console.log(`Request succeeded or non-quota error (status ${upstreamResponse.status}), using key ${apiKey.substring(0, 5)}...`);
+                // Success or non-429 error from upstream
+                console.log(`Request succeeded or non-quota error (status ${upstreamResponse.status}), using key ${apiKey.substring(0, 5)}...`);
                 retries++;
                 console.log(`Retry... (try times ${retries + 1}/${maxRetries})`);
                 await new Promise(resolve => setTimeout(resolve, 100)); // Short delay before retry
@@ -194,13 +183,11 @@ async function handleApiProxy(request: Request, env: Env, ctx: ExecutionContext)
 // --- Worker Entrypoint ---
 
 export default { // Ensure Request/ExecutionContext/Response use imported types
-    async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> { // Ensure Request/ExecutionContext/Response use imported types
+    async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
         const url = new URL(request.url);
-
         if (url.pathname === '/' && request.method === 'GET') {
-            return handleHelloRequest(env);
+            return handleHelloRequest(request, env);
         } else {
-            // Handle API proxy logic for all other paths
             return handleApiProxy(request, env, ctx);
         }
     },

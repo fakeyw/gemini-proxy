@@ -15,31 +15,21 @@
 	"migrations": [
 		{
 			"tag": "v1",
-			"new_classes": ["ApiKeyManager"]
-		},
-		{
-			"tag": "v2",
-			"renamed_classes": [
-				{
-					"from": "MyDurableObject",
-					"to": "ApiKeyManager"
-				}
+			"new_classes": [
+				"ApiKeyManager"
 			]
 		}
 	],
 	"vars": {
 		"UPSTREAM_API_URL": "https://generativelanguage.googleapis.com/v1beta/openai"
 	},
+	"assets": {
+		"directory": "./html",
+		"binding": "ASSETS"
+	},
 	"triggers": {
 		"crons": [
 			"0 7 * * *"
 		]
 	}
-	// --- 构建配置 (可选) ---
-	// 如果你的项目结构简单 (如本例)，Wrangler 通常能自动处理构建。
-	// 如果有复杂的构建步骤 (例如使用 Webpack/esbuild 的自定义配置)，可以在这里指定。
-	// "build": {
-	//   "command": "npm run build", // 例如: 如果你需要运行特定的构建脚本
-	//   "watch_dir": "src"         // 指定监视哪个目录以触发重新构建
-	// }
 }
