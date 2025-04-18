@@ -32,11 +32,12 @@
     npx wrangler secret put API_KEYS
     ```
 
-    或者，你也可以在 `wrangler.toml` 文件中配置环境变量：
+    或者，你也可以在 `wrangler.json` 文件中配置环境变量：
 
-    ```toml
-    [vars]
-    UPSTREAM_API_URL = "https://generativelanguage.googleapis.com/v1beta/openai"
+    ```json
+    "vars": {
+		"UPSTREAM_API_URL": "https://generativelanguage.googleapis.com/v1beta/openai"
+	},
     ```
 
     **注意：**  使用 `wrangler secret put` 命令配置的环境变量会加密存储，更加安全。

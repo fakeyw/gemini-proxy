@@ -34,11 +34,12 @@ This project is a Cloudflare Workers application that proxies LLM API requests a
     npx wrangler secret put API_KEYS
     ```
 
-    Alternatively, you can configure environment variables in the `wrangler.toml` file:
+    Alternatively, you can configure environment variables in the `wrangler.json` file:
 
-    ```toml
-    [vars]
-    UPSTREAM_API_URL = "https://generativelanguage.googleapis.com/v1beta/openai"
+    ```json
+    "vars": {
+		"UPSTREAM_API_URL": "https://generativelanguage.googleapis.com/v1beta/openai"
+	},
     ```
 
     **Note:** Environment variables configured using the `wrangler secret put` command are stored encrypted and are more secure.
