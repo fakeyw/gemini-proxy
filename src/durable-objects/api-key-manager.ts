@@ -28,8 +28,13 @@ export class ApiKeyManager {
             console.log(`Loaded state: ${this.keysState.length} keys, current index ${this.currentIndex}`);
 
             this.keysState.forEach(keyData => {
+                // Ensure usageCount exists (for compatibility with older states)
                 if (keyData.usageCount === undefined) {
                     keyData.usageCount = {};
+                }
+                // Ensure exhaustedModels exists (for compatibility with older states)
+                if (keyData.exhaustedModels === undefined) {
+                    keyData.exhaustedModels = [];
                 }
             });
 
@@ -89,9 +94,9 @@ export class ApiKeyManager {
                 return this.handleMarkExhausted(request);
             case "/reset":
                 return this.handleReset(request);
-            case "/incrementUsage": // 新增路由
+            case "/incrementUsage":
                 return this.handleIncrementUsage(request);
-            case "/getAllStats": // 新增路由
+            case "/getAllStats":
                 return this.handleGetAllStats(request);
             default:
                 return new Response("Not found in Durable Object", { status: 404 });

@@ -13,18 +13,6 @@
 		]
 	},
 	"migrations": [
-		{
-			"tag": "v1",
-			"new_classes": [
-				"ApiKeyManager"
-			]
-		},
-		{
-			"tag": "v2",
-			"new_sqlite_classes": [
-				"ApiKeyManager"
-			]
-		}
 	],
 	"vars": {
 		"UPSTREAM_API_URL": "https://generativelanguage.googleapis.com/v1beta/openai"

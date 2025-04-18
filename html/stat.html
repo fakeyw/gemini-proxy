@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Key Usage Statistics</title>
+    <style>
+        body { font-family: sans-serif; margin: 20px; background-color: #f4f4f4; }
+        h1 { color: #333; }
+        table { width: 80%; margin: 20px auto; border-collapse: collapse; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background-color: #007bff; color: white; }
+        tr:hover { background-color: #f1f1f1; }
+        .container { max-width: 900px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        .error { color: red; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>API Key Usage Statistics</h1>
+        <div id="countdown-area">
+            <p>Next Reset Countdown: <span id="countdown">Calculating...</span></p>
+        </div>
+
+        <div id="stats-container">
+            <p>Loading statistics...</p>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const statsContainer = document.getElementById('stats-container');
+
+            const currentPath = window.location.pathname;
+            // Assuming the stat page is served from a path ending in /stat
+            const modelUsagePath = currentPath.replace('/stat', '/model_usage');
+            const fetchUrl = `${window.location.origin}${modelUsagePath}`;
+
+            fetch(fetchUrl)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (!Array.isArray(data)) {
+                        throw new Error('Invalid data format received.');
+                    }
+
+                    if (data.length === 0) {
+                        statsContainer.innerHTML = '<p>No statistics available.</p>';
+                        return;
+                    }
+
+                    // Create a table to display the stats
+                    const table = document.createElement('table');
+                    let tableHTML = '<thead><tr><th>API Key (Partial)</th><th>Model Usage</th></tr></thead><tbody>';
+
+                    data.forEach(item => {
+                        const keyPartial = item.key ? item.key.substring(0, 8) + '...' : 'N/A';
+                        let usageDetails = 'No usage recorded';
+                        if (item.usageCount && Object.keys(item.usageCount).length > 0) {
+                            usageDetails = Object.entries(item.usageCount)
+                                .map(([model, count]) => `${model}: ${count}`)
+                                .join(', ');
+                        }
+                        tableHTML += `<tr><td>${keyPartial}</td><td>${usageDetails}</td></tr>`;
+                    });
+
+                    tableHTML += '</tbody>';
+                    table.innerHTML = tableHTML;
+
+                    statsContainer.innerHTML = ''; // Clear loading message
+                    statsContainer.appendChild(table);
+                })
+                .catch(error => {
+                    console.error('Error fetching stats:', error);
+                    statsContainer.innerHTML = `<p class="error">Failed to load statistics: ${error.message}</p>`;
+                });
+        });
+
+        // Countdown logic
+        const countdownElement = document.getElementById('countdown');
+
+        function updateCountdown() {
+            const nowUtcTimestamp = Date.now(); // Get current UTC milliseconds
+
+            // Create a Date object from the timestamp to get date components
+            const now = new Date(nowUtcTimestamp);
+
+            // Calculate today's reset time (UTC 07:00) in milliseconds
+            const todayResetUtcTimestamp = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 7, 0, 0);
+
+            let nextResetTimeTimestamp = todayResetUtcTimestamp;
+
+            // If current UTC time is past today's reset time, set reset time for tomorrow
+            if (nowUtcTimestamp >= todayResetUtcTimestamp) {
+                 nextResetTimeTimestamp = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 7, 0, 0);
+            }
+
+            const timeDiff = nextResetTimeTimestamp - nowUtcTimestamp; // Difference in milliseconds
+
+            if (timeDiff < 0) {
+                countdownElement.textContent = "Reset";
+                return;
+            }
+
+            const days = Math.floor(timeDiff / (1000 * 60 * 60 * 24));
+            const hours = Math.floor((timeDiff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            const minutes = Math.floor((timeDiff % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((timeDiff % (1000 * 60)) / 1000);
+
+            countdownElement.textContent = `${days}d ${hours}h ${minutes}m ${seconds}s`;
+        }
+
+        // Initial call and update every second
+        updateCountdown();
+        setInterval(updateCountdown, 1000);
+    </script>
+</body>
+</html>

@@ -70,3 +70,7 @@ This project uses Durable Objects to manage API Keys.
 ## Scheduled Tasks
 
 This project resets the status of all keys daily at GMT+8 15:00 (UTC 07:00) via scheduled tasks.
+
+## Model Usage Statistics Page (`/stat`)
+
+This project includes a `/stat` page that displays model usage statistics. You can access this page at the `/stat` path.

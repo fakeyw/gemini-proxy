@@ -15,7 +15,6 @@ export { ApiKeyManager };
  * @returns {Promise<Response>} - The response object.
  */
 async function handleHelloRequest(request: Request, env: Env): Promise<Response> {
-    console.log('env.ASSETS:', env.ASSETS);
     let htmlTemplate = "";
     try {
         const helloHtmlUrl = new URL('/hello.html', request.url);
@@ -80,7 +79,6 @@ async function getApiKey(managerStub: DurableObjectStub, modelName: string): Pro
 async function proxyRequestToUpstream(request: Request, apiKey: string, env: Env): Promise<Response> { // Ensure Request/Response use imported types
     var upstreamUrl = env.UPSTREAM_API_URL || "https://api.openai.com/v1/"; // Default or from env
     const requestPath = new URL(request.url).pathname;
-    console.log("path=", requestPath)
     if (upstreamUrl.endsWith('/')) {
         upstreamUrl = upstreamUrl.slice(0, -1);
     }
@@ -97,13 +95,8 @@ async function proxyRequestToUpstream(request: Request, apiKey: string, env: Env
         redirect: 'follow'
     });
 
-    console.log(`Proxying request to ${upstreamUrl} using key ${apiKey.substring(0, 5)}...`);
-    console.log(`Request details: Method - ${upstreamRequest.method}, URL - ${upstreamRequest.url}, Headers - ${JSON.stringify(Object.fromEntries(upstreamRequest.headers.entries()))}`);
-
     try {
         const response = await fetch(upstreamRequest);
-        console.log(`Received response from ${upstreamUrl} with status ${response.status}`);
-        console.log(`Response headers: ${JSON.stringify(Object.fromEntries(response.headers.entries()))}`);
         return response;
 
     } catch (error) {
@@ -129,6 +122,7 @@ function handleUpstream429(apiKey: string, managerStub: DurableObjectStub, ctx: 
  * Main handler for proxying API requests with key rotation and retries.
  */
 async function handleApiProxy(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> { // Ensure Request/ExecutionContext/Response use imported types
+    console.log(`[handleApiProxy] Request received: ${request.method} ${request.url}`);
     const doId = env.API_KEY_MANAGER.idFromName("global-api-key-manager");
     const managerStub = env.API_KEY_MANAGER.get(doId);
     const maxRetries = 5;
@@ -136,47 +130,47 @@ async function handleApiProxy(request: Request, env: Env, ctx: ExecutionContext)
 
     const requestCloneForBody = request.clone();
     let modelName: string = "";
+    let messages: string = "";
     let requestBody: any;
 
     try {
         const contentType = requestCloneForBody.headers.get("Content-Type");
         if (requestCloneForBody.method !== 'GET' && contentType && contentType.includes('application/json')) {
-             requestBody = await requestCloneForBody.json();
-             if (requestBody?.model) {
-                 modelName = requestBody.model;
-                 console.log(`Extracted model name from body: ${modelName}`);
-             } else {
-                 console.warn("Request body is JSON but does not contain a 'model' field. Using default model name.");
-             }
+            requestBody = await requestCloneForBody.json();
+            modelName = requestBody?.model ? requestBody.model : '';
+            messages = requestBody?.messages ? requestBody.messages : '';
+            console.log(`[handleApiProxy] modelName=${modelName}, messages=${JSON.stringify(messages)}`);
         } else {
-             console.log(`Request method ${requestCloneForBody.method} or Content-Type ${contentType} does not suggest a JSON body with model info. Using default model name.`);
+            console.log(`[handleApiProxy] Non-JSON or non-POST body. Using default model name.`);
         }
 
     } catch (e: any) {
-        console.warn("Could not parse request body as JSON or extract model name. Using default model name.", e.message);
+        console.warn("[handleApiProxy] Could not parse request body as JSON or extract model name. Using default model name.", e.message);
     }
-
 
     while (retries < maxRetries) {
         let apiKey: string;
         try {
             apiKey = await getApiKey(managerStub, modelName);
         } catch (error: any) {
+            console.error(`[handleApiProxy] Error getting API key: ${error.message}`);
             const status = error.message.includes("all API key") ? 429 : 500;
             return new Response(error.message, { status });
         }
 
         try {
             const upstreamResponse = await proxyRequestToUpstream(request.clone(), apiKey, env);
+
             if (upstreamResponse.status === 429) {
+                console.log(`[handleApiProxy] Upstream returned 429. Handling exhaustion and retrying.`);
                 handleUpstream429(apiKey, managerStub, ctx, modelName);
-                console.log(`Retrying request for model ${modelName}... (attempt ${retries + 1}/${maxRetries})`);
+                console.log(`[handleApiProxy] Retrying request for model ${modelName}... (attempt ${retries + 1}/${maxRetries})`);
                 retries++;
                 await new Promise(resolve => setTimeout(resolve, 100));
                 continue;
             }
 
-            console.log(`Request succeeded or non-quota error (status ${upstreamResponse.status}) for model ${modelName}, using key ${apiKey.substring(0, 5)}... Incrementing usage count.`);
+            console.log(`[handleApiProxy] Request succeeded or non-quota error (status ${upstreamResponse.status}) for model ${modelName}, using key ${apiKey.substring(0, 5)}...`);
 
             // 使用 waitUntil 异步上报调用次数
             const incrementUrl = `https://internal-do/incrementUsage?key=${encodeURIComponent(apiKey)}&model=${encodeURIComponent(modelName)}`;
@@ -184,12 +178,12 @@ async function handleApiProxy(request: Request, env: Env, ctx: ExecutionContext)
                 managerStub.fetch(incrementUrl, { method: 'POST' })
                     .then(async (res) => {
                         if (!res.ok) {
-                            console.error(`Failed to increment usage count for key ${apiKey.substring(0, 5)}... model ${modelName}: ${await res.text()}`);
+                            console.error(`[handleApiProxy] Failed incr key cnt ${apiKey.substring(0, 5)}... model ${modelName}: ${await res.text()}`);
                         } else {
-                             console.log(`Successfully incremented usage count for key ${apiKey.substring(0, 5)}... model ${modelName}`);
+                            console.log(`[handleApiProxy] Key usage incremented for ${apiKey.substring(0, 5)}... model ${modelName}`);
                         }
                     })
-                    .catch(err => console.error(`Error calling incrementUsage for key ${apiKey.substring(0, 5)}... model ${modelName}:`, err))
+                    .catch(err => console.error(`[handleApiProxy] Error calling incrementUsage for key ${apiKey.substring(0, 5)}... model ${modelName}:`, err))
             );
 
             const responseHeaders = new Headers(upstreamResponse.headers);
@@ -201,12 +195,12 @@ async function handleApiProxy(request: Request, env: Env, ctx: ExecutionContext)
             });
 
         } catch (error: any) {
-            console.error(`Error during upstream request for model ${modelName} with key ${apiKey.substring(0, 5)}...:`, error);
+            console.error(`[handleApiProxy] Error during upstream request for model ${modelName} with key ${apiKey.substring(0, 5)}...:`, error);
             return new Response(error.message || "Error proxying request to upstream API", { status: 502 }); // Bad Gateway might be appropriate
         }
     }
 
-    console.error(`Maximum number of retries reached (${maxRetries}). Request failed for model ${modelName}.`);
+    console.error(`[handleApiProxy] Maximum number of retries reached (${maxRetries}). Request failed for model ${modelName}.`);
     return new Response(`Unable to process request after ${maxRetries} attempts using different keys for model ${modelName}. All keys may be exhausted for this model or the upstream service is unavailable.`, { status: 503 }); // Service Unavailable
 }
 
@@ -216,9 +210,51 @@ async function handleApiProxy(request: Request, env: Env, ctx: ExecutionContext)
 export default {
     async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
         const url = new URL(request.url);
+        const doId = env.API_KEY_MANAGER.idFromName("global-api-key-manager");
+        const managerStub = env.API_KEY_MANAGER.get(doId);
         if (url.pathname === '/' && request.method === 'GET') {
             return handleHelloRequest(request, env);
-        } else {
+        } else if (url.pathname === '/stat' && request.method === 'GET') {
+            try {
+                const statHtmlUrl = new URL('/stat.html', request.url);
+                const statHtmlRequest = new Request(statHtmlUrl.toString(), { method: 'GET' });
+                const assetResponse = await env.ASSETS.fetch(statHtmlRequest);
+
+                if (!assetResponse.ok) {
+                    console.log(`Error fetching stat.html template from ASSETS: Status ${assetResponse.status}`);
+                    return new Response('Error fetching stat.html template from ASSETS', { status: assetResponse.status });
+                }
+
+                return new Response(assetResponse.body, {
+                    headers: { 'Content-Type': 'text/html; charset=utf-8' },
+                });
+            } catch (e: any) {
+                console.error('Error fetching or processing stat.html template from ASSETS:', e);
+                return new Response(`Error processing stat.html: ${e.message}\n${e.stack}`, { status: 500 });
+            }
+        } else if (url.pathname === '/model_usage' && request.method === 'GET') {
+            // Handle /model_usage API request
+            try {
+                const statsResponse = await managerStub.fetch("https://internal-do/getAllStats");
+
+                if (!statsResponse.ok) {
+                    console.error(`Error fetching stats from DO: Status ${statsResponse.status}`);
+                    return new Response(`Error fetching stats from DO: ${await statsResponse.text()}`, { status: statsResponse.status });
+                }
+
+                // Return the JSON response directly from the DO
+                return new Response(statsResponse.body, {
+                    headers: { 'Content-Type': 'application/json' },
+                    status: statsResponse.status
+                });
+
+            } catch (e: any) {
+                console.error('Error calling getAllStats on Durable Object:', e);
+                return new Response(`Error fetching model usage stats: ${e.message}\n${e.stack}`, { status: 500 });
+            }
+        }
+        else {
+            // Default to handling API proxy requests
             return handleApiProxy(request, env, ctx);
         }
     },
@@ -228,10 +264,9 @@ export default {
         const doId = env.API_KEY_MANAGER.idFromName("global-api-key-manager");
         const managerStub = env.API_KEY_MANAGER.get(doId);
         try {
-            console.log("Calling API Key manager reset...");
             const resetResponse = await managerStub.fetch("https://internal-do/reset", { method: "POST" });
             if (resetResponse.ok) {
-                console.log("Successfully reset API key status.");
+                console.log("API key status reset.");
             } else {
                 console.error(`Failed to reset API key status (status ${resetResponse.status}): ${await resetResponse.text()}`);
             }
