@@ -20,11 +20,26 @@ export class ApiKeyManager {
     }
     async loadState() {
         const stored: ApiKeyManagerStorage | undefined = await this.state.storage.get("keyManagerState");
-        if (stored?.keys && stored.currentIndex !== undefined) {
+
+        if (stored?.keys && stored.currentIndex !== undefined && stored.keys.length > 0) {
+            // Load existing state
             this.keysState = stored.keys;
             this.currentIndex = stored.currentIndex;
             console.log(`Loaded state: ${this.keysState.length} keys, current index ${this.currentIndex}`);
+
+            this.keysState.forEach(keyData => {
+                if (keyData.usageCount === undefined) {
+                    keyData.usageCount = {};
+                }
+            });
+
         } else {
+            if (stored?.keys && stored.currentIndex !== undefined) {
+                console.warn("Loaded state format is outdated or invalid. Re-initializing from environment variables.");
+            } else {
+                console.log("No stored state found. Initializing from environment variables.");
+            }
+
             const apiKeysString = this.env.API_KEYS;
             console.log(this.env);
             if (!apiKeysString) {
@@ -33,13 +48,14 @@ export class ApiKeyManager {
                 this.currentIndex = 0;
             } else {
                 const keys = apiKeysString.split(',').map(k => k.trim()).filter(Boolean);
-                this.keysState = keys.map(key => ({ key: key, status: 'available' }));
+                this.keysState = keys.map(key => ({ key: key, exhaustedModels: [], usageCount: {} }));
                 this.currentIndex = 0;
                 console.log(`Initialized state from environment variables: ${this.keysState.length} keys`);
                 await this.saveState();
             }
         }
     }
+
     async saveState() {
         const stateToStore: ApiKeyManagerStorage = {
             keys: this.keysState,
@@ -48,6 +64,7 @@ export class ApiKeyManager {
         await this.state.storage.put("keyManagerState", stateToStore);
         console.log(`Saved state: ${this.keysState.length} keys, current index ${this.currentIndex}`);
     }
+
     /**
      * @description Durable Object's fetch function, used to handle different API requests.
      * @param {Request} request - The client request.
@@ -72,75 +89,102 @@ export class ApiKeyManager {
                 return this.handleMarkExhausted(request);
             case "/reset":
                 return this.handleReset(request);
+            case "/incrementUsage": // 新增路由
+                return this.handleIncrementUsage(request);
+            case "/getAllStats": // 新增路由
+                return this.handleGetAllStats(request);
             default:
                 return new Response("Not found in Durable Object", { status: 404 });
         }
     }
 
     /**
-     * @description Handles the /getKey route, returning an available API key.
+     * @description Handles the /getKey route, returning an available API key for a specific model.
      * @param {Request} request - The client request.
      * @returns {Promise<Response>} - Returns a Promise that resolves to a Response object containing the API key.
      */
     async handleGetKey(request: Request): Promise<Response> {
+        const url = new URL(request.url);
+        const modelName = url.searchParams.get("model"); // Get model name
+
         if (this.keysState.length === 0) {
             return new Response("API key not configured", { status: 500 });
         }
 
         let attempts = 0;
         const maxAttempts = this.keysState.length;
+        let searchIndex = this.currentIndex; // Start searching from the current index
 
         while (attempts < maxAttempts) {
-            const currentKeyData = this.keysState[this.currentIndex];
-            if (currentKeyData.status === 'available') {
-                console.log(`Providing key (index ${this.currentIndex}): ${currentKeyData.key.substring(0, 5)}...`);
-                // Return the currently used key and index for easy marking by the worker.
-                return new Response(JSON.stringify({ apiKey: currentKeyData.key, index: this.currentIndex }), {
+            const currentKeyData = this.keysState[searchIndex];
+
+            let isAvailable = false;
+            if (modelName) {
+                isAvailable = !currentKeyData.exhaustedModels.includes(modelName);
+            } else {
+                isAvailable = true;
+            }
+
+            if (isAvailable) {
+                console.log(`Providing key (index ${searchIndex}) ${modelName ? `for model ${modelName}` : ''}: ${currentKeyData.key.substring(0, 5)}...`);
+                this.currentIndex = (searchIndex + 1) % this.keysState.length;
+                return new Response(JSON.stringify({ apiKey: currentKeyData.key, index: searchIndex }), {
                     headers: { 'Content-Type': 'application/json' },
                 });
             }
-            this.currentIndex = (this.currentIndex + 1) % this.keysState.length;
+
+            searchIndex = (searchIndex + 1) % this.keysState.length;
             attempts++;
         }
 
-        console.warn("All API keys have been marked as exhausted.");
-        return new Response("All API keys have been marked as exhausted", { status: 429 });
+        if (modelName) {
+            console.warn(`All API keys are exhausted for model ${modelName}.`);
+            return new Response(`All API keys exhausted for model ${modelName}`, { status: 429 });
+        } else {
+            console.warn("Could not find an available API key (no model specified).");
+            return new Response("Could not find an available API key", { status: 429 });
+        }
     }
 
     /**
-     * @description Handles the /markExhausted route, marking the specified API key as exhausted.
+     * @description Handles the /markExhausted route, marking the specified API key as exhausted for a specific model.
      * @param {Request} request - The client request.
      * @returns {Promise<Response>} - Returns a Promise that resolves to a Response object representing the operation result.
      */
     async handleMarkExhausted(request: Request): Promise<Response> {
         const url = new URL(request.url);
         const apiKeyToMark = url.searchParams.get("key");
+        const modelName = url.searchParams.get("model");
 
         if (!apiKeyToMark) {
             return new Response("Missing 'key' query parameter", { status: 400 });
         }
+        if (!modelName) {
+            return new Response("Missing 'model' query parameter", { status: 400 });
+        }
 
-        let marked = false;
         const keyIndex = this.keysState.findIndex(k => k.key === apiKeyToMark);
 
-        if (keyIndex !== -1 && this.keysState[keyIndex].status === 'available') {
-            this.keysState[keyIndex].status = 'exhausted';
-            marked = true;
-            // Only move the index if the exhausted key is the one currently pointed to
-            if (this.currentIndex === keyIndex) {
-                this.currentIndex = (this.currentIndex + 1) % this.keysState.length;
+        if (keyIndex !== -1) {
+            const keyData = this.keysState[keyIndex];
+            if (!keyData.exhaustedModels.includes(modelName)) { // Check if model is already listed
+                keyData.exhaustedModels.push(modelName); // Add model to the list
+                console.log(`Marking key ${apiKeyToMark.substring(0, 5)}... (index ${keyIndex}) as exhausted for model ${modelName}.`);
+                await this.saveState();
+                return new Response(`Marked key ${apiKeyToMark.substring(0, 5)}... as exhausted for model ${modelName}`, { status: 200 });
+            } else {
+                console.log(`Key ${apiKeyToMark.substring(0, 5)}... (index ${keyIndex}) was already marked as exhausted for model ${modelName}.`);
+                // Return 200 OK even if already marked, as the state is consistent with the request
+                return new Response(`Key ${apiKeyToMark.substring(0, 5)}... already exhausted for model ${modelName}`, { status: 200 });
             }
-            console.log(`Marking key as exhausted: ${apiKeyToMark.substring(0, 5)}... (index ${keyIndex}). Current index is now ${this.currentIndex}`);
-            await this.saveState();
-            return new Response(`Marked key ${apiKeyToMark.substring(0, 5)}... as exhausted`, { status: 200 });
         } else {
-            console.log(`Key not found or already exhausted: ${apiKeyToMark.substring(0, 5)}...`);
-            return new Response("Key not found or already exhausted", { status: 404 });
+            console.log(`Key not found: ${apiKeyToMark.substring(0, 5)}...`);
+            return new Response("Key not found", { status: 404 });
         }
     }
 
     /**
-     * @description Handles the /reset route, resetting the status of all API keys to available.
+     * @description Handles the /reset route, resetting the exhausted models list for all API keys.
      * @param {Request} request - The client request.
      * @returns {Promise<Response>} - Returns a Promise that resolves to a Response object representing the operation result.
      */
@@ -149,10 +193,77 @@ export class ApiKeyManager {
             return new Response("Method Not Allowed", { status: 405 });
         }
 
-        console.log("Resetting the status of all API keys to available.");
-        this.keysState.forEach(keyData => keyData.status = 'available');
-        this.currentIndex = 0;
+        console.log("Resetting the exhausted models list for all API keys.");
+        this.keysState.forEach(keyData => {
+            keyData.exhaustedModels = []; // Reset exhausted models
+            keyData.usageCount = {}; // Reset usage count
+        });
+        this.currentIndex = 0; // Reset index
         await this.saveState();
-        return new Response("All API key statuses have been reset", { status: 200 });
+        return new Response("All API key exhausted model lists and usage counts have been reset", { status: 200 });
+    }
+    /**
+     * @description Handles the /incrementUsage route, increments the usage count for a specific key and model.
+     * @param {Request} request - The client request.
+     * @returns {Promise<Response>} - Returns a Promise that resolves to a Response object representing the operation result.
+     */
+    async handleIncrementUsage(request: Request): Promise<Response> {
+        if (request.method !== "POST") {
+            return new Response("Method Not Allowed", { status: 405 });
+        }
+
+        const url = new URL(request.url);
+        const apiKeyToIncrement = url.searchParams.get("key");
+        const modelName = url.searchParams.get("model");
+
+        if (!apiKeyToIncrement) {
+            return new Response("Missing 'key' query parameter", { status: 400 });
+        }
+        if (!modelName) {
+            return new Response("Missing 'model' query parameter", { status: 400 });
+        }
+
+        const keyIndex = this.keysState.findIndex(k => k.key === apiKeyToIncrement);
+
+        if (keyIndex !== -1) {
+            const keyData = this.keysState[keyIndex];
+            // Ensure usageCount exists (for compatibility)
+            if (keyData.usageCount === undefined) {
+                keyData.usageCount = {};
+            }
+            // Increment count for the specific model
+            keyData.usageCount[modelName] = (keyData.usageCount[modelName] || 0) + 1;
+
+            console.log(`Incremented usage for key ${apiKeyToIncrement.substring(0, 5)}... (index ${keyIndex}) for model ${modelName}. New count: ${keyData.usageCount[modelName]}`);
+            await this.saveState();
+            return new Response(`Incremented usage for key ${apiKeyToIncrement.substring(0, 5)}... model ${modelName}`, { status: 200 });
+        } else {
+            console.log(`Key not found for incrementing usage: ${apiKeyToIncrement.substring(0, 5)}...`);
+            return new Response("Key not found", { status: 404 });
+        }
+    }
+
+    /**
+     * @description Handles the /getAllStats route, returns usage statistics for all keys.
+     * @param {Request} request - The client request.
+     * @returns {Promise<Response>} - Returns a Promise that resolves to a Response object containing the statistics.
+     */
+    async handleGetAllStats(request: Request): Promise<Response> {
+        if (request.method !== "GET") {
+            return new Response("Method Not Allowed", { status: 405 });
+        }
+
+        console.log("Providing all API key usage statistics.");
+
+        // Return a simplified structure containing only key and usageCount
+        const stats = this.keysState.map(keyData => ({
+            key: keyData.key,
+            usageCount: keyData.usageCount || {} // Ensure usageCount is an object even if undefined
+        }));
+
+        return new Response(JSON.stringify(stats), {
+            headers: { 'Content-Type': 'application/json' },
+            status: 200
+        });
     }
 }

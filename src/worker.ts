@@ -45,21 +45,22 @@ async function handleHelloRequest(request: Request, env: Env): Promise<Response>
  * @returns {Promise<string>} - The API key string.
  * @throws {Error} - If communication fails or no key is available.
  */
-async function getApiKey(managerStub: DurableObjectStub): Promise<string> {
+async function getApiKey(managerStub: DurableObjectStub, modelName: string): Promise<string> {
     let apiKeyResponse: Response;
     try {
-        apiKeyResponse = await managerStub.fetch("https://internal-do/getKey");
+        // Pass the modelName as a query parameter
+        apiKeyResponse = await managerStub.fetch(`https://internal-do/getKey?model=${encodeURIComponent(modelName)}`);
     } catch (err) {
         console.error("Error fetching key from Durable Object:", err);
         throw new Error("Failed to communicate with key manager");
     }
 
     if (apiKeyResponse.status === 429) {
-        console.warn(`Could not get API key from manager (status ${apiKeyResponse.status}): All keys are exhausted.`);
-        throw new Error("All API keys are currently exhausted");
+        console.warn(`Could not get API key from manager (status ${apiKeyResponse.status}): All keys are exhausted for model ${modelName}.`);
+        throw new Error(`All API keys are currently exhausted for model ${modelName}`);
     } else if (!apiKeyResponse.ok) {
         const errorBody = await apiKeyResponse.text();
-        console.warn(`Could not get API key from manager (status ${apiKeyResponse.status}): ${errorBody}`);
+        console.warn(`Could not get API key from manager for model ${modelName} (status ${apiKeyResponse.status}): ${errorBody}`);
         throw new Error(errorBody || "Failed to get an available API key");
     }
 
@@ -114,13 +115,13 @@ async function proxyRequestToUpstream(request: Request, apiKey: string, env: Env
 /**
  * Handles the upstream 429 response by marking the key as exhausted in the DO.
  */
-function handleUpstream429(apiKey: string, managerStub: DurableObjectStub, ctx: ExecutionContext): void { // Ensure DurableObjectStub/ExecutionContext use imported types
-    console.warn(`API key ${apiKey.substring(0, 5)}... may be exhausted (status 429). Marking as exhausted and retrying.`);
-    const markRequest = new Request(`https://internal-do/markExhausted?key=${encodeURIComponent(apiKey)}`, { method: 'POST' });
+function handleUpstream429(apiKey: string, managerStub: DurableObjectStub, ctx: ExecutionContext, modelName: string): void { // Ensure DurableObjectStub/ExecutionContext use imported types
+    console.warn(`API key ${apiKey.substring(0, 5)}... may be exhausted for model ${modelName} (status 429). Marking as exhausted and retrying.`);
+    const markRequest = new Request(`https://internal-do/markExhausted?key=${encodeURIComponent(apiKey)}&model=${encodeURIComponent(modelName)}`, { method: 'POST' });
     try {
-        ctx.waitUntil(managerStub.fetch(markRequest).catch(err => console.error(`后台 key 标记失败，对于 ${apiKey.substring(0, 5)}...:`, err)));
+        ctx.waitUntil(managerStub.fetch(markRequest).catch(err => console.error(`后台 key 标记失败，对于 ${apiKey.substring(0, 5)}... 和模型 ${modelName}:`, err)));
     } catch (err) {
-        console.error(`set key ${apiKey.substring(0, 5)}... exhausted failed: `, err);
+        console.error(`set key ${apiKey.substring(0, 5)}... exhausted for model ${modelName} failed: `, err);
     }
 }
 
@@ -130,35 +131,67 @@ function handleUpstream429(apiKey: string, managerStub: DurableObjectStub, ctx: 
 async function handleApiProxy(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> { // Ensure Request/ExecutionContext/Response use imported types
     const doId = env.API_KEY_MANAGER.idFromName("global-api-key-manager");
     const managerStub = env.API_KEY_MANAGER.get(doId);
-    const maxRetries = 5; // Consider making this configurable via env var?
+    const maxRetries = 5;
     let retries = 0;
+
+    const requestCloneForBody = request.clone();
+    let modelName: string = "";
+    let requestBody: any;
+
+    try {
+        const contentType = requestCloneForBody.headers.get("Content-Type");
+        if (requestCloneForBody.method !== 'GET' && contentType && contentType.includes('application/json')) {
+             requestBody = await requestCloneForBody.json();
+             if (requestBody?.model) {
+                 modelName = requestBody.model;
+                 console.log(`Extracted model name from body: ${modelName}`);
+             } else {
+                 console.warn("Request body is JSON but does not contain a 'model' field. Using default model name.");
+             }
+        } else {
+             console.log(`Request method ${requestCloneForBody.method} or Content-Type ${contentType} does not suggest a JSON body with model info. Using default model name.`);
+        }
+
+    } catch (e: any) {
+        console.warn("Could not parse request body as JSON or extract model name. Using default model name.", e.message);
+    }
+
 
     while (retries < maxRetries) {
         let apiKey: string;
         try {
-            apiKey = await getApiKey(managerStub);
+            apiKey = await getApiKey(managerStub, modelName);
         } catch (error: any) {
-            // Handle errors from getApiKey (communication, all keys exhausted, invalid response)
             const status = error.message.includes("all API key") ? 429 : 500;
             return new Response(error.message, { status });
         }
 
         try {
-            const upstreamResponse = await proxyRequestToUpstream(request.clone(), apiKey, env); // Clone request for potential retries
-
+            const upstreamResponse = await proxyRequestToUpstream(request.clone(), apiKey, env);
             if (upstreamResponse.status === 429) {
-                handleUpstream429(apiKey, managerStub, ctx);
-                console.log(`Retrying request... (attempt ${retries + 1}/${maxRetries})`);
-                // Success or non-429 error from upstream
-                console.log(`Request succeeded or non-quota error (status ${upstreamResponse.status}), using key ${apiKey.substring(0, 5)}...`);
+                handleUpstream429(apiKey, managerStub, ctx, modelName);
+                console.log(`Retrying request for model ${modelName}... (attempt ${retries + 1}/${maxRetries})`);
                 retries++;
-                console.log(`Retry... (try times ${retries + 1}/${maxRetries})`);
-                await new Promise(resolve => setTimeout(resolve, 100)); // Short delay before retry
-                continue; // Try next key
+                await new Promise(resolve => setTimeout(resolve, 100));
+                continue;
             }
 
-            // Success or non-429 error from upstream
-            console.log(`Succeed or other error (state ${upstreamResponse.status}), using key ${apiKey.substring(0, 5)}...`);
+            console.log(`Request succeeded or non-quota error (status ${upstreamResponse.status}) for model ${modelName}, using key ${apiKey.substring(0, 5)}... Incrementing usage count.`);
+
+            // 使用 waitUntil 异步上报调用次数
+            const incrementUrl = `https://internal-do/incrementUsage?key=${encodeURIComponent(apiKey)}&model=${encodeURIComponent(modelName)}`;
+            ctx.waitUntil(
+                managerStub.fetch(incrementUrl, { method: 'POST' })
+                    .then(async (res) => {
+                        if (!res.ok) {
+                            console.error(`Failed to increment usage count for key ${apiKey.substring(0, 5)}... model ${modelName}: ${await res.text()}`);
+                        } else {
+                             console.log(`Successfully incremented usage count for key ${apiKey.substring(0, 5)}... model ${modelName}`);
+                        }
+                    })
+                    .catch(err => console.error(`Error calling incrementUsage for key ${apiKey.substring(0, 5)}... model ${modelName}:`, err))
+            );
+
             const responseHeaders = new Headers(upstreamResponse.headers);
             responseHeaders.set('X-Proxied-By', 'Cloudflare-Worker'); // Add custom header
             return new Response(upstreamResponse.body, {
@@ -168,21 +201,19 @@ async function handleApiProxy(request: Request, env: Env, ctx: ExecutionContext)
             });
 
         } catch (error: any) {
-            // Handle errors from proxyRequestToUpstream (fetch failed)
-            // We don't necessarily know if the key is bad, could be network. Don't mark key.
+            console.error(`Error during upstream request for model ${modelName} with key ${apiKey.substring(0, 5)}...:`, error);
             return new Response(error.message || "Error proxying request to upstream API", { status: 502 }); // Bad Gateway might be appropriate
         }
     }
 
-    // Retries exhausted
-    console.error(`Maximum number of retries reached (${maxRetries}). Request failed.`);
-    return new Response(`Unable to process request after ${maxRetries} attempts using different keys. All keys may be exhausted or the upstream service is unavailable.`, { status: 503 }); // Service Unavailable
+    console.error(`Maximum number of retries reached (${maxRetries}). Request failed for model ${modelName}.`);
+    return new Response(`Unable to process request after ${maxRetries} attempts using different keys for model ${modelName}. All keys may be exhausted for this model or the upstream service is unavailable.`, { status: 503 }); // Service Unavailable
 }
 
 
 // --- Worker Entrypoint ---
 
-export default { // Ensure Request/ExecutionContext/Response use imported types
+export default {
     async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
         const url = new URL(request.url);
         if (url.pathname === '/' && request.method === 'GET') {

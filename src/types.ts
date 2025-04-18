@@ -11,7 +11,8 @@ export interface Env {
 
 export interface ApiKeyState {
     key: string;
-    status: 'available' | 'exhausted';
+    exhaustedModels: string[];
+    usageCount: { [modelName: string]: number }; // 新增：记录每个模型的调用次数
 }
 
 export interface ApiKeyManagerStorage {
