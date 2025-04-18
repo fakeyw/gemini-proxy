@@ -88,21 +88,34 @@ async function getApiKey(managerStub: DurableObjectStub): Promise<string> {
  * Throws an error if the upstream fetch fails.
  */
 async function proxyRequestToUpstream(request: Request, apiKey: string, env: Env): Promise<Response> { // Ensure Request/Response use imported types
-    const upstreamUrl = env.UPSTREAM_API_URL || "https://api.openai.com/v1/chat/completions"; // Default or from env
+    var upstreamUrl = env.UPSTREAM_API_URL || "https://api.openai.com/v1/"; // Default or from env
+    const requestPath = new URL(request.url).pathname;
+    console.log("path=", requestPath)
+    if (upstreamUrl.endsWith('/')) {
+        upstreamUrl = upstreamUrl.slice(0, -1);
+    }
+    upstreamUrl = upstreamUrl + requestPath;
     const upstreamRequest = new Request(upstreamUrl, {
         method: request.method,
-        headers: {
-            ...request.headers, // Clone incoming headers
-            'Authorization': `Bearer ${apiKey}`,
-            // Consider removing or conditionally setting 'Content-Type' if needed
-        },
+        headers: (() => {
+            const headers = new Headers(request.headers);
+            headers.delete('Authorization'); // Remove existing Authorization header
+            headers.set('Authorization', `Bearer ${apiKey}`); // Set the new one
+            return headers;
+        })(),
         body: request.body,
         redirect: 'follow'
     });
 
     console.log(`Proxying request to ${upstreamUrl} using key ${apiKey.substring(0, 5)}...`);
+    console.log(`Request details: Method - ${upstreamRequest.method}, URL - ${upstreamRequest.url}, Headers - ${JSON.stringify(Object.fromEntries(upstreamRequest.headers.entries()))}`);
+
     try {
-        return await fetch(upstreamRequest);
+        const response = await fetch(upstreamRequest);
+        console.log(`Received response from ${upstreamUrl} with status ${response.status}`);
+        console.log(`Response headers: ${JSON.stringify(Object.fromEntries(response.headers.entries()))}`);
+        return response;
+
     } catch (error) {
         console.error(`Error during upstream request with key ${apiKey.substring(0, 5)}...:`, error);
         throw new Error("Error proxying request to upstream API"); // Re-throw for handling in the main loop
@@ -116,10 +129,8 @@ function handleUpstream429(apiKey: string, managerStub: DurableObjectStub, ctx: 
     console.warn(`API key ${apiKey.substring(0, 5)}... may be exhausted (status 429). Marking as exhausted and retrying.`);
     const markRequest = new Request(`https://internal-do/markExhausted?key=${encodeURIComponent(apiKey)}`, { method: 'POST' });
     try {
-        // Fire and forget, don't await completion
         ctx.waitUntil(managerStub.fetch(markRequest).catch(err => console.error(`后台 key 标记失败，对于 ${apiKey.substring(0, 5)}...:`, err)));
     } catch (err) {
-        // Log error if starting the fetch fails, but don't block
         console.error(`set key ${apiKey.substring(0, 5)}... exhausted failed: `, err);
     }
 }

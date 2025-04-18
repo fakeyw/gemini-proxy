@@ -16,6 +16,15 @@
 		{
 			"tag": "v1",
 			"new_classes": ["ApiKeyManager"]
+		},
+		{
+			"tag": "v2",
+			"renamed_classes": [
+				{
+					"from": "MyDurableObject",
+					"to": "ApiKeyManager"
+				}
+			]
 		}
 	],
 	"vars": {
