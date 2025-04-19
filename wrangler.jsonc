@@ -1,29 +1,33 @@
 // wrangler.jsonc
 {
-	// --- 基本信息 ---
-	"name": "gemini-proxy",
-	"main": "src/worker.ts",
-	"compatibility_date": "2025-04-11",
-	"durable_objects": {
-		"bindings": [
-			{
-				"name": "API_KEY_MANAGER",
-				"class_name": "ApiKeyManager"
-			}
-		]
-	},
-	"migrations": [
-	],
-	"vars": {
-		"UPSTREAM_API_URL": "https://generativelanguage.googleapis.com/v1beta/openai"
-	},
-	"assets": {
-		"directory": "./html",
-		"binding": "ASSETS"
-	},
-	"triggers": {
-		"crons": [
-			"0 7 * * *"
-		]
-	}
+    // --- 基本信息 ---
+    "name": "gemini-proxy",
+    "main": "src/worker.ts",
+    "compatibility_date": "2025-04-11",
+    "durable_objects": {
+        "bindings": [
+            {
+                "name": "API_KEY_MANAGER",
+                "class_name": "ApiKeyManager"
+            }
+        ]
+    },
+    "migrations": [],
+    "vars": {
+        "GEMINI_UPSTREAM_URL": "https://generativelanguage.googleapis.com/v1beta",
+        "OPENAI_UPSTREAM_URL": "https://generativelanguage.googleapis.com/v1beta/openai",
+    },
+    "assets": {
+        "directory": "./html",
+        "binding": "ASSETS"
+    },
+    "triggers": {
+        "crons": [
+            "0 7 * * *"
+        ]
+    },
+    "observability": {
+        "enabled": true,
+        "head_sampling_rate": 1
+    }
 }

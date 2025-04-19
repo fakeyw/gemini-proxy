@@ -1,4 +1,10 @@
-1. Resolve 429 limit Demension
-2. Add management functions and page
-3. Move keys from env param to manager storage
-4. Check private api-key at first
+[Improvments]
+1. Resolve 429 limit Demension.
+2. Add management functions and page.
+3. Move keys from env param to manager storage.
+4. Check private api-key at first.
+
+[Bugs]
+1. Logs out of ApiManager, are not stably print in wrangler tail.
+2. Openai api type proxy is available for Open-WebUI, but strangly not on API Tester. WHYYYYYY?
+3. Conuter on stat page seems wrong.

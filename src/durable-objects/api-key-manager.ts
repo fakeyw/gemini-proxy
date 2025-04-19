@@ -111,6 +111,7 @@ export class ApiKeyManager {
     async handleGetKey(request: Request): Promise<Response> {
         const url = new URL(request.url);
         const modelName = url.searchParams.get("model"); // Get model name
+        const apiType = url.searchParams.get("api_type");
 
         if (this.keysState.length === 0) {
             return new Response("API key not configured", { status: 500 });
@@ -131,7 +132,7 @@ export class ApiKeyManager {
             }
 
             if (isAvailable) {
-                console.log(`Providing key (index ${searchIndex}) ${modelName ? `for model ${modelName}` : ''}: ${currentKeyData.key.substring(0, 5)}...`);
+                console.log(`Providing key (index ${searchIndex}) ${modelName ? `for model ${modelName}, api ${apiType}` : ''}: ${currentKeyData.key.substring(0, 5)}...`);
                 this.currentIndex = (searchIndex + 1) % this.keysState.length;
                 return new Response(JSON.stringify({ apiKey: currentKeyData.key, index: searchIndex }), {
                     headers: { 'Content-Type': 'application/json' },

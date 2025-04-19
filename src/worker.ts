@@ -1,6 +1,9 @@
 import { Env } from "./types";
 import { ApiKeyManager } from "./durable-objects/api-key-manager";
 import { DurableObjectStub, ExecutionContext, ScheduledController } from "@cloudflare/workers-types"; // Re-add explicit import of core types
+import { ApiHandler } from "./api-handlers/base";
+import apiManager from "./api-manager";
+
 /**
  * Export the ApiKeyManager class.
  */
@@ -31,7 +34,12 @@ async function handleHelloRequest(request: Request, env: Env): Promise<Response>
         console.error('Error fetching or processing hello.html template from ASSETS:', e);
         return new Response(`Error processing hello.html: ${e.message}\n${e.stack}`, { status: 500 });
     }
-    const html = htmlTemplate.replace('${UPSTREAM_API_URL}', env.UPSTREAM_API_URL || 'Not Configured');
+    // Replace placeholder with configured upstream URLs
+    const upstreamInfo = `
+        Gemini: ${env.GEMINI_UPSTREAM_URL || 'Not Configured'}<br>
+        OpenAI: ${env.OPENAI_UPSTREAM_URL || 'Not Configured'}
+    `;
+    const html = htmlTemplate.replace('${UPSTREAM_API_URL_INFO}', upstreamInfo); // Assuming hello.html has a placeholder like ${UPSTREAM_API_URL_INFO}
 
     return new Response(html, {
         headers: { 'Content-Type': 'text/html; charset=utf-8' },
@@ -44,11 +52,11 @@ async function handleHelloRequest(request: Request, env: Env): Promise<Response>
  * @returns {Promise<string>} - The API key string.
  * @throws {Error} - If communication fails or no key is available.
  */
-async function getApiKey(managerStub: DurableObjectStub, modelName: string): Promise<string> {
+async function getApiKey(managerStub: DurableObjectStub, modelName: string, apiType: string): Promise<string> {
     let apiKeyResponse: Response;
     try {
         // Pass the modelName as a query parameter
-        apiKeyResponse = await managerStub.fetch(`https://internal-do/getKey?model=${encodeURIComponent(modelName)}`);
+        apiKeyResponse = await managerStub.fetch(`https://internal-do/getKey?model=${encodeURIComponent(modelName)}&api_type=${encodeURIComponent(apiType)}`);
     } catch (err) {
         console.error("Error fetching key from Durable Object:", err);
         throw new Error("Failed to communicate with key manager");
@@ -69,40 +77,6 @@ async function getApiKey(managerStub: DurableObjectStub, modelName: string): Pro
         throw new Error("Internal error: Invalid response from key manager");
     }
     return apiKey;
-}
-
-/**
- * Proxies the incoming request to the upstream API using the provided API key.
- * Returns the upstream Response object.
- * Throws an error if the upstream fetch fails.
- */
-async function proxyRequestToUpstream(request: Request, apiKey: string, env: Env): Promise<Response> { // Ensure Request/Response use imported types
-    var upstreamUrl = env.UPSTREAM_API_URL || "https://api.openai.com/v1/"; // Default or from env
-    const requestPath = new URL(request.url).pathname;
-    if (upstreamUrl.endsWith('/')) {
-        upstreamUrl = upstreamUrl.slice(0, -1);
-    }
-    upstreamUrl = upstreamUrl + requestPath;
-    const upstreamRequest = new Request(upstreamUrl, {
-        method: request.method,
-        headers: (() => {
-            const headers = new Headers(request.headers);
-            headers.delete('Authorization'); // Remove existing Authorization header
-            headers.set('Authorization', `Bearer ${apiKey}`); // Set the new one
-            return headers;
-        })(),
-        body: request.body,
-        redirect: 'follow'
-    });
-
-    try {
-        const response = await fetch(upstreamRequest);
-        return response;
-
-    } catch (error) {
-        console.error(`Error during upstream request with key ${apiKey.substring(0, 5)}...:`, error);
-        throw new Error("Error proxying request to upstream API"); // Re-throw for handling in the main loop
-    }
 }
 
 /**
@@ -128,41 +102,37 @@ async function handleApiProxy(request: Request, env: Env, ctx: ExecutionContext)
     const maxRetries = 5;
     let retries = 0;
 
-    const requestCloneForBody = request.clone();
-    let modelName: string = "";
-    let messages: string = "";
-    let requestBody: any;
-
-    try {
-        const contentType = requestCloneForBody.headers.get("Content-Type");
-        if (requestCloneForBody.method !== 'GET' && contentType && contentType.includes('application/json')) {
-            requestBody = await requestCloneForBody.json();
-            modelName = requestBody?.model ? requestBody.model : '';
-            messages = requestBody?.messages ? requestBody.messages : '';
-            console.log(`[handleApiProxy] modelName=${modelName}, messages=${JSON.stringify(messages)}`);
-        } else {
-            console.log(`[handleApiProxy] Non-JSON or non-POST body. Using default model name.`);
-        }
-
-    } catch (e: any) {
-        console.warn("[handleApiProxy] Could not parse request body as JSON or extract model name. Using default model name.", e.message);
+    // Dynamically determine the handler based on the request
+    const handler = apiManager.getRequestHandler(request.clone());
+    if (!handler) {
+        console.error(`[handleApiProxy] Could not determine API type from request: ${request.method} ${request.url}`);
+        return new Response('unknown api type.', { status: 400 });
     }
+    console.log(`[handleApiProxy] Matched handler: ${handler.apiType}`);
+
+    let modelName = await handler.parseModelName(request.clone()); // Clone request as parseModelName might read it
+
+    modelName = modelName === null ? "" : modelName; // Use empty string if model name is null
+    await console.log(`[handleApiProxy] Determined API Type: ${handler.apiType}, Model Name: ${modelName || 'N/A'}`);
 
     while (retries < maxRetries) {
         let apiKey: string;
         try {
-            apiKey = await getApiKey(managerStub, modelName);
+            apiKey = await getApiKey(managerStub, modelName, handler.apiType);
         } catch (error: any) {
-            console.error(`[handleApiProxy] Error getting API key: ${error.message}`);
+            console.error(`[handleApiProxy] Error getting API key for model ${modelName}: ${error.message}`);
             const status = error.message.includes("all API key") ? 429 : 500;
             return new Response(error.message, { status });
         }
 
         try {
-            const upstreamResponse = await proxyRequestToUpstream(request.clone(), apiKey, env);
+            const upstreamRequest = handler.buildUpstreamRequest(request.clone(), apiKey, modelName, env);
+            console.log(`[handleApiProxy] Sending upstream request to: ${upstreamRequest.url}`);
+            const upstreamResponse = await fetch(upstreamRequest);
+            console.log(`[handleApiProxy] Received upstream response with status: ${upstreamResponse.status}`);
 
             if (upstreamResponse.status === 429) {
-                console.log(`[handleApiProxy] Upstream returned 429. Handling exhaustion and retrying.`);
+                console.log(`[handleApiProxy] Upstream returned 429 for model ${modelName}. Handling exhaustion and retrying.`);
                 handleUpstream429(apiKey, managerStub, ctx, modelName);
                 console.log(`[handleApiProxy] Retrying request for model ${modelName}... (attempt ${retries + 1}/${maxRetries})`);
                 retries++;
@@ -170,24 +140,29 @@ async function handleApiProxy(request: Request, env: Env, ctx: ExecutionContext)
                 continue;
             }
 
-            console.log(`[handleApiProxy] Request succeeded or non-quota error (status ${upstreamResponse.status}) for model ${modelName}, using key ${apiKey.substring(0, 5)}...`);
-
-            // 使用 waitUntil 异步上报调用次数
-            const incrementUrl = `https://internal-do/incrementUsage?key=${encodeURIComponent(apiKey)}&model=${encodeURIComponent(modelName)}`;
-            ctx.waitUntil(
-                managerStub.fetch(incrementUrl, { method: 'POST' })
-                    .then(async (res) => {
-                        if (!res.ok) {
-                            console.error(`[handleApiProxy] Failed incr key cnt ${apiKey.substring(0, 5)}... model ${modelName}: ${await res.text()}`);
-                        } else {
-                            console.log(`[handleApiProxy] Key usage incremented for ${apiKey.substring(0, 5)}... model ${modelName}`);
-                        }
-                    })
-                    .catch(err => console.error(`[handleApiProxy] Error calling incrementUsage for key ${apiKey.substring(0, 5)}... model ${modelName}:`, err))
-            );
+            if (modelName == '') {
+                console.log(`[handleApiProxy] Request succeeded or non-quota error (status ${upstreamResponse.status}) for model ${modelName}, using key ${apiKey.substring(0, 5)}...`);
+                const incrementUrl = `https://internal-do/incrementUsage?key=${encodeURIComponent(apiKey)}&model=${encodeURIComponent(modelName)}`;
+                ctx.waitUntil(
+                    managerStub.fetch(incrementUrl, { method: 'POST' })
+                        .then(async (res) => {
+                            if (!res.ok) {
+                                console.error(`[handleApiProxy] Failed incr key cnt ${apiKey.substring(0, 5)}... model ${modelName}: ${await res.text()}`);
+                            } else {
+                                console.log(`[handleApiProxy] Key usage incremented for ${apiKey.substring(0, 5)}... model ${modelName}`);
+                            }
+                        })
+                        .catch(err => console.error(`[handleApiProxy] Error calling incrementUsage for key ${apiKey.substring(0, 5)}... model ${modelName}:`, err))
+                );
+            }
 
             const responseHeaders = new Headers(upstreamResponse.headers);
+            // Remove potentially problematic headers that Cloudflare Workers handles automatically
+            responseHeaders.delete('Content-Length');
+            responseHeaders.delete('Transfer-Encoding');
             responseHeaders.set('X-Proxied-By', 'Cloudflare-Worker'); // Add custom header
+
+            console.log(`[handleApiProxy] Returning response to client with status: ${upstreamResponse.status}`);
             return new Response(upstreamResponse.body, {
                 status: upstreamResponse.status,
                 statusText: upstreamResponse.statusText,
