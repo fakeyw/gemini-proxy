@@ -128,8 +128,22 @@ async function handleApiProxy(request: Request, env: Env, ctx: ExecutionContext)
         try {
             const upstreamRequest = handler.buildUpstreamRequest(request.clone(), apiKey, modelName, env);
             console.log(`[handleApiProxy] Sending upstream request to: ${upstreamRequest.url}`);
+            // Log request body
+            try {
+                const requestBody = await upstreamRequest.clone().text();
+                console.log(`[handleApiProxy] Upstream request body: ${requestBody}`);
+            } catch (e) {
+                console.error(`[handleApiProxy] Failed to log request body: ${e}`);
+            }
             const upstreamResponse = await fetch(upstreamRequest);
             console.log(`[handleApiProxy] Received upstream response with status: ${upstreamResponse.status}`);
+            // Log response body
+            try {
+                const responseBody = await upstreamResponse.clone().text();
+                console.log(`[handleApiProxy] Upstream response body: ${responseBody}`);
+            } catch (e) {
+                console.error(`[handleApiProxy] Failed to log response body: ${e}`);
+            }
 
             if (upstreamResponse.status === 429) {
                 console.log(`[handleApiProxy] Upstream returned 429 for model ${modelName}. Handling exhaustion and retrying.`);
