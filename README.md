@@ -3,6 +3,7 @@
 ## Introduction
 
 This project is a Cloudflare Workers application that proxies LLM API requests and intelligently manages multiple API keys.
+Support and automatically recognize API requests in Gemini and OpenAI styles.
 
 [简体中文](/docs/README_zh-CN.md)
 
@@ -24,7 +25,8 @@ This project is a Cloudflare Workers application that proxies LLM API requests a
 
     You need to configure the following environment variables:
 
-    *   `UPSTREAM_API_URL`: The URL of the upstream API, defaults to `https://generativelanguage.googleapis.com/v1beta/openai`.
+    *   `GEMINI_UPSTREAM_URL`: The URL of the GEMINI upstream API, as `https://generativelanguage.googleapis.com/v1beta`.
+    *   `OPENAI_UPSTREAM_URL`: The URL of the OPENAI upstream API, as `https://generativelanguage.googleapis.com/v1beta/openai`.
     *   `API_KEYS`: A list of API keys, separated by commas.
 
     You can configure environment variables using the following commands:
@@ -34,12 +36,13 @@ This project is a Cloudflare Workers application that proxies LLM API requests a
     npx wrangler secret put API_KEYS
     ```
 
-    Alternatively, you can configure environment variables in the `wrangler.json` file:
+    You can configure environment variables in the `wrangler.json` file:
 
     ```json
     "vars": {
-		"UPSTREAM_API_URL": "https://generativelanguage.googleapis.com/v1beta/openai"
-	},
+        "GEMINI_UPSTREAM_URL": "https://generativelanguage.googleapis.com/v1beta",
+        "OPENAI_UPSTREAM_URL": "https://generativelanguage.googleapis.com/v1beta/openai",
+    },
     ```
 
     **Note:** Environment variables configured using the `wrangler secret put` command are stored encrypted and are more secure.

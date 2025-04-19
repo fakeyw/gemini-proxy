@@ -15,7 +15,7 @@
     "migrations": [],
     "vars": {
         "GEMINI_UPSTREAM_URL": "https://generativelanguage.googleapis.com/v1beta",
-        "OPENAI_UPSTREAM_URL": "https://generativelanguage.googleapis.com/v1beta/openai",
+        "OPENAI_UPSTREAM_URL": "https://generativelanguage.googleapis.com/v1beta/openai"
     },
     "assets": {
         "directory": "./html",

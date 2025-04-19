@@ -86,7 +86,7 @@ function handleUpstream429(apiKey: string, managerStub: DurableObjectStub, ctx: 
     console.warn(`API key ${apiKey.substring(0, 5)}... may be exhausted for model ${modelName} (status 429). Marking as exhausted and retrying.`);
     const markRequest = new Request(`https://internal-do/markExhausted?key=${encodeURIComponent(apiKey)}&model=${encodeURIComponent(modelName)}`, { method: 'POST' });
     try {
-        ctx.waitUntil(managerStub.fetch(markRequest).catch(err => console.error(`后台 key 标记失败，对于 ${apiKey.substring(0, 5)}... 和模型 ${modelName}:`, err)));
+        ctx.waitUntil(managerStub.fetch(markRequest).catch(err => console.error(`mark key ${apiKey.substring(0, 5)} exhausted at ${modelName}:`, err)));
     } catch (err) {
         console.error(`set key ${apiKey.substring(0, 5)}... exhausted for model ${modelName} failed: `, err);
     }
@@ -140,7 +140,7 @@ async function handleApiProxy(request: Request, env: Env, ctx: ExecutionContext)
                 continue;
             }
 
-            if (modelName == '') {
+            if (modelName != '') {
                 console.log(`[handleApiProxy] Request succeeded or non-quota error (status ${upstreamResponse.status}) for model ${modelName}, using key ${apiKey.substring(0, 5)}...`);
                 const incrementUrl = `https://internal-do/incrementUsage?key=${encodeURIComponent(apiKey)}&model=${encodeURIComponent(modelName)}`;
                 ctx.waitUntil(

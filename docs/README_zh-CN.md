@@ -2,7 +2,9 @@
 
 ## 简介
 
-本项目是一个 Cloudflare Workers 应用，用于代理 LLM API 请求，并智能地管理多个 API key。
+本项目是一个 Cloudflare Workers 应用，用于代理 Google Gemini API 请求，并智能地切换多个 API key。
+支持且自动识别 Gemini 和 OpenAI 风格的 API 请求。
+
 
 ## 部署步骤
 
@@ -22,7 +24,8 @@
 
     你需要配置以下环境变量：
 
-    *   `UPSTREAM_API_URL`：上游 API 的 URL，默认为 `https://generativelanguage.googleapis.com/v1beta/openai`。
+    *   `GEMINI_UPSTREAM_URL`：上游 GEMINI 风格 API 的 URL，如 `https://generativelanguage.googleapis.com/v1beta`。
+    *   `OPENAI_UPSTREAM_URL`: 上游 OPENAI 风格 API 的 URL，如 `https://generativelanguage.googleapis.com/v1beta/openai`。
     *   `API_KEYS`：API key 列表，多个 key 之间用逗号分隔。
 
     你可以使用以下命令配置环境变量：
@@ -32,12 +35,13 @@
     npx wrangler secret put API_KEYS
     ```
 
-    或者，你也可以在 `wrangler.json` 文件中配置环境变量：
+    建议在 `wrangler.json` 文件中配置环境变量：
 
     ```json
     "vars": {
-		"UPSTREAM_API_URL": "https://generativelanguage.googleapis.com/v1beta/openai"
-	},
+        "GEMINI_UPSTREAM_URL": "https://generativelanguage.googleapis.com/v1beta",
+        "OPENAI_UPSTREAM_URL": "https://generativelanguage.googleapis.com/v1beta/openai",
+    },
     ```
 
     **注意：**  使用 `wrangler secret put` 命令配置的环境变量会加密存储，更加安全。
