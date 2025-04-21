@@ -7,6 +7,7 @@ export interface Env {
     API_KEYS: string;
     GEMINI_UPSTREAM_URL: string;
     OPENAI_UPSTREAM_URL: string;
+    PROXY_API_KEY?: string; // Add custom API key for request validation (optional)
     ASSETS: Fetcher; // Add ASSETS binding
 }
 

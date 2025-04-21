@@ -21,6 +21,12 @@ export interface ApiHandler {
     parseModelName(request: Request): Promise<string | null>;
 
     /**
+     * Parses the API key from the incoming request.
+     * Returns the API key string or null if not found.
+     */
+    parseApiKey(request: Request): string | null;
+
+    /**
      * Builds the upstream request based on the original request, API key, model name, and environment.
      */
     buildUpstreamRequest(request: Request, apiKey: string, modelName: string, env: Env): Request;

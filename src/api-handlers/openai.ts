@@ -34,6 +34,24 @@ export class OpenAIHandler implements ApiHandler {
         return null;
     }
 
+    /**
+     * Parses the API key from the incoming request's Authorization header.
+     * Expects the format "Bearer <key>".
+     * @param request The incoming request.
+     * @returns The API key string or null if not found or in incorrect format.
+     */
+    parseApiKey(request: Request): string | null {
+        const authHeader = request.headers.get('Authorization');
+        if (!authHeader) {
+            return null;
+        }
+        const parts = authHeader.split(' ');
+        if (parts.length === 2 && parts[0].toLowerCase() === 'bearer') {
+            return parts[1];
+        }
+        return null;
+    }
+
     buildUpstreamRequest(request: Request, apiKey: string, modelName: string, env: Env): Request {
         let upstreamUrl = env.OPENAI_UPSTREAM_URL || "https://api.openai.com/v1/";
         const requestPath = new URL(request.url).pathname;

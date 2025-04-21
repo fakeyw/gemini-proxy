@@ -27,6 +27,9 @@
     *   `GEMINI_UPSTREAM_URL`：上游 GEMINI 风格 API 的 URL，如 `https://generativelanguage.googleapis.com/v1beta`。
     *   `OPENAI_UPSTREAM_URL`: 上游 OPENAI 风格 API 的 URL，如 `https://generativelanguage.googleapis.com/v1beta/openai`。
     *   `API_KEYS`：API key 列表，多个 key 之间用逗号分隔。
+    *   `PROXY_API_KEY`：（可选）用于请求验证的自定义 API key。如果设置，传入的 API 代理请求必须包含此 key 进行身份验证。客户端可以通过以下两种方式之一提供 key：
+        *   **对于 OpenAI 风格请求：** 在请求头部包含 `Authorization: Bearer <key>`。
+        *   **对于 Gemini 风格请求：** 在 URL 中包含 `key=<key>` 查询参数。
 
     你可以使用以下命令配置环境变量：
 

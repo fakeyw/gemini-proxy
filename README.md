@@ -28,6 +28,9 @@ Support and automatically recognize API requests in Gemini and OpenAI styles.
     *   `GEMINI_UPSTREAM_URL`: The URL of the GEMINI upstream API, as `https://generativelanguage.googleapis.com/v1beta`.
     *   `OPENAI_UPSTREAM_URL`: The URL of the OPENAI upstream API, as `https://generativelanguage.googleapis.com/v1beta/openai`.
     *   `API_KEYS`: A list of API keys, separated by commas.
+    *   `PROXY_API_KEY`: (Optional) A custom API key for request validation. If set, incoming API proxy requests must include this key for authentication. Clients can provide the key in one of two ways:
+        *   **For OpenAI-style requests:** Include an `Authorization: Bearer <key>` header.
+        *   **For Gemini-style requests:** Include a `key=<key>` query parameter in the URL.
 
     You can configure environment variables using the following commands:
 

@@ -34,6 +34,33 @@ export class GeminiHandler implements ApiHandler {
         return null;
     }
 
+    /**
+     * Parses the API key from the incoming request's Authorization header.
+     * Expects the format "Bearer <key>".
+     * @param request The incoming request.
+     * @returns The API key string or null if not found or in incorrect format.
+     */
+    parseApiKey(request: Request): string | null {
+        const url = new URL(request.url);
+        // 1. Check for 'key' query parameter (common for Gemini)
+        const queryApiKey = url.searchParams.get('key');
+        if (queryApiKey) {
+            return queryApiKey;
+        }
+
+        // 2. Check for 'Authorization: Bearer <key>' header
+        const authHeader = request.headers.get('Authorization');
+        if (!authHeader) {
+            return null;
+        }
+        const parts = authHeader.split(' ');
+        if (parts.length === 2 && parts[0].toLowerCase() === 'bearer') {
+            return parts[1];
+        }
+
+        return null;
+    }
+
     buildUpstreamRequest(request: Request, apiKey: string, modelName: string, env: Env): Request {
         const url = new URL(request.url);
         const params = new URLSearchParams(url.search);

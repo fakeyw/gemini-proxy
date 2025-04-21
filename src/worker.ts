@@ -244,6 +244,31 @@ export default {
         }
         else {
             // Default to handling API proxy requests
+
+            // Get the appropriate handler for the request
+            const handler = apiManager.getRequestHandler(request.clone());
+            if (!handler) {
+                console.error(`[fetch] Could not determine API type from request: ${request.method} ${request.url}`);
+                return new Response('unknown api type.', { status: 400 });
+            }
+
+            // Parse the API key from the incoming request
+            const clientApiKey = handler.parseApiKey(request.clone());
+
+            // Get the configured API key from environment variables
+            const configuredApiKey = env.PROXY_API_KEY;
+
+            // Perform API key validation if PROXY_API_KEY is configured
+            if (configuredApiKey && configuredApiKey !== "") {
+                if (!clientApiKey || clientApiKey !== configuredApiKey) {
+                    console.warn(`[fetch] API Key validation failed for request: ${request.method} ${request.url}`);
+                    return new Response('Invalid or missing API Key.', { status: 401 });
+                }
+                console.log(`[fetch] API Key validated successfully for request: ${request.method} ${request.url}`);
+            } else {
+                console.log(`[fetch] PROXY_API_KEY not configured. Skipping API Key validation.`);
+            }
+
             return handleApiProxy(request, env, ctx);
         }
     },
