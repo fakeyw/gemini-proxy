@@ -201,7 +201,7 @@ export default {
         const url = new URL(request.url);
         const doId = env.API_KEY_MANAGER.idFromName("global-api-key-manager");
         const managerStub = env.API_KEY_MANAGER.get(doId);
-        if (url.pathname === '/' && request.method === 'GET') {
+        if (url.pathname === '/hello' && request.method === 'GET') {
             return handleHelloRequest(request, env);
         } else if (url.pathname === '/stat' && request.method === 'GET') {
             try {
@@ -222,7 +222,6 @@ export default {
                 return new Response(`Error processing stat.html: ${e.message}\n${e.stack}`, { status: 500 });
             }
         } else if (url.pathname === '/model_usage' && request.method === 'GET') {
-            // Handle /model_usage API request
             try {
                 const statsResponse = await managerStub.fetch("https://internal-do/getAllStats");
 
@@ -231,7 +230,6 @@ export default {
                     return new Response(`Error fetching stats from DO: ${await statsResponse.text()}`, { status: statsResponse.status });
                 }
 
-                // Return the JSON response directly from the DO
                 return new Response(statsResponse.body, {
                     headers: { 'Content-Type': 'application/json' },
                     status: statsResponse.status
@@ -243,22 +241,14 @@ export default {
             }
         }
         else {
-            // Default to handling API proxy requests
-
-            // Get the appropriate handler for the request
             const handler = apiManager.getRequestHandler(request.clone());
             if (!handler) {
                 console.error(`[fetch] Could not determine API type from request: ${request.method} ${request.url}`);
                 return new Response('unknown api type.', { status: 400 });
             }
-
-            // Parse the API key from the incoming request
             const clientApiKey = handler.parseApiKey(request.clone());
-
-            // Get the configured API key from environment variables
             const configuredApiKey = env.PROXY_API_KEY;
 
-            // Perform API key validation if PROXY_API_KEY is configured
             if (configuredApiKey && configuredApiKey !== "") {
                 if (!clientApiKey || clientApiKey !== configuredApiKey) {
                     console.warn(`[fetch] API Key validation failed for request: ${request.method} ${request.url}`);
