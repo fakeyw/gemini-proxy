@@ -18,7 +18,7 @@ export class OpenAIHandler implements ApiHandler {
     match(request: Request): boolean {
         const url = new URL(request.url);
         const path = url.pathname;
-        return path.includes('/chat/completions') || path.includes('/embeddings') || path.includes('/models');
+        return path.includes('/chat/completions') || path.includes('/embeddings') || path === '/models';
     }
 
     async parseModelName(request: Request): Promise<string | null> {

@@ -247,6 +247,7 @@ export default {
             const configuredApiKey = env.PROXY_API_KEY;
 
             if (configuredApiKey && configuredApiKey !== "") {
+                console.log(clientApiKey, handler.apiType);
                 if (!clientApiKey || clientApiKey !== configuredApiKey) {
                     console.warn(`[fetch] API Key validation failed for request: ${request.method} ${request.url}`);
                     return new Response('Invalid or missing API Key.', { status: 401 });

@@ -42,20 +42,9 @@ export class GeminiHandler implements ApiHandler {
      */
     parseApiKey(request: Request): string | null {
         const url = new URL(request.url);
-        // 1. Check for 'key' query parameter (common for Gemini)
         const queryApiKey = url.searchParams.get('key');
         if (queryApiKey) {
             return queryApiKey;
-        }
-
-        // 2. Check for 'Authorization: Bearer <key>' header
-        const authHeader = request.headers.get('Authorization');
-        if (!authHeader) {
-            return null;
-        }
-        const parts = authHeader.split(' ');
-        if (parts.length === 2 && parts[0].toLowerCase() === 'bearer') {
-            return parts[1];
         }
 
         return null;

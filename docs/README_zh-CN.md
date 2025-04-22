@@ -8,37 +8,34 @@
 
 ## 部署步骤
 
-1.  **安装 Wrangler CLI：**
+1.  **配置 Cloudflare 账号：**
 
     ```bash
-    npm install -g wrangler
+    npx wrangler login
     ```
 
-2.  **配置 Cloudflare 账号：**
-
-    ```bash
-    wrangler login
-    ```
-
-3.  **配置环境变量：**
+2.  **配置环境变量：**
 
     你需要配置以下环境变量：
 
-    *   `GEMINI_UPSTREAM_URL`：上游 GEMINI 风格 API 的 URL，如 `https://generativelanguage.googleapis.com/v1beta`。
-    *   `OPENAI_UPSTREAM_URL`: 上游 OPENAI 风格 API 的 URL，如 `https://generativelanguage.googleapis.com/v1beta/openai`。
-    *   `API_KEYS`：API key 列表，多个 key 之间用逗号分隔。
-    *   `PROXY_API_KEY`：（可选）用于请求验证的自定义 API key。如果设置，传入的 API 代理请求必须包含此 key 进行身份验证。客户端可以通过以下两种方式之一提供 key：
+    *   `GEMINI_UPSTREAM_URL`：上游 GEMINI 风格 API 的 URL，如 `https://generativelanguage.googleapis.com/v1beta`。这通常在 `wrangler.jsonc` 中设置。
+    *   `OPENAI_UPSTREAM_URL`: 上游 OPENAI 风格 API 的 URL，如 `https://generativelanguage.googleapis.com/v1beta/openai`。这通常在 `wrangler.jsonc` 中设置。
+    *   `API_KEYS`：API key 列表，多个 key 之间用逗号分隔。应使用 `wrangler secret put API_KEYS` 进行设置。
+    *   `PROXY_API_KEY`：（可选）用于请求验证的自定义 API key。应使用 `wrangler secret put PROXY_API_KEY` 进行设置。
+
+    如果设置了 `PROXY_API_KEY`，传入的 API 代理请求必须包含此 key 进行身份验证。客户端可以通过以下两种方式之一提供 key：
         *   **对于 OpenAI 风格请求：** 在请求头部包含 `Authorization: Bearer <key>`。
         *   **对于 Gemini 风格请求：** 在 URL 中包含 `key=<key>` 查询参数。
 
     你可以使用以下命令配置环境变量：
 
     ```bash
-    npx wrangler secret put UPSTREAM_API_URL
+    ```bash
     npx wrangler secret put API_KEYS
+    npx wrangler secret put PROXY_API_KEY
     ```
 
-    建议在 `wrangler.json` 文件中配置环境变量：
+    你可以在 `wrangler.jsonc` 文件中配置 `GEMINI_UPSTREAM_URL` 和 `OPENAI_UPSTREAM_URL`：
 
     ```json
     "vars": {
@@ -49,7 +46,7 @@
 
     **注意：**  使用 `wrangler secret put` 命令配置的环境变量会加密存储，更加安全。
 
-4.  **部署 Worker：**
+3.  **部署 Worker：**
 
     ```bash
     npx wrangler deploy
@@ -57,10 +54,10 @@
 
 ## `wrangler` 命令使用
 
-*   `wrangler login`：配置 Cloudflare 账号。
-*   `wrangler secret put <key>`：配置加密环境变量。
-*   `wrangler deploy`：部署 Worker。
-*   `wrangler dev`：在本地开发和测试 Worker。
+*   `npx wrangler login`：配置 Cloudflare 账号。
+*   `npx wrangler secret put <key>`：配置加密环境变量。
+*   `npx wrangler deploy`：部署 Worker。
+*   `npx wrangler dev`：在本地开发和测试 Worker。
 
 ## 异常处理
 

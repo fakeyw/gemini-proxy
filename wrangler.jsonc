@@ -15,8 +15,7 @@
     "migrations": [],
     "vars": {
         "GEMINI_UPSTREAM_URL": "https://generativelanguage.googleapis.com/v1beta",
-        "OPENAI_UPSTREAM_URL": "https://generativelanguage.googleapis.com/v1beta/openai",
-        "PROXY_API_KEY": "" // Add your custom API key here for request validation
+        "OPENAI_UPSTREAM_URL": "https://generativelanguage.googleapis.com/v1beta/openai"
     },
     "assets": {
         "directory": "./html",

@@ -9,37 +9,34 @@ Support and automatically recognize API requests in Gemini and OpenAI styles.
 
 ## Deployment Steps
 
-1.  **Install Wrangler CLI:**
+1.  **Configure Cloudflare Account:**
 
     ```bash
-    npm install -g wrangler
+    npx wrangler login
     ```
 
-2.  **Configure Cloudflare Account:**
-
-    ```bash
-    wrangler login
-    ```
-
-3.  **Configure Environment Variables:**
+2.  **Configure Environment Variables:**
 
     You need to configure the following environment variables:
 
-    *   `GEMINI_UPSTREAM_URL`: The URL of the GEMINI upstream API, as `https://generativelanguage.googleapis.com/v1beta`.
-    *   `OPENAI_UPSTREAM_URL`: The URL of the OPENAI upstream API, as `https://generativelanguage.googleapis.com/v1beta/openai`.
-    *   `API_KEYS`: A list of API keys, separated by commas.
-    *   `PROXY_API_KEY`: (Optional) A custom API key for request validation. If set, incoming API proxy requests must include this key for authentication. Clients can provide the key in one of two ways:
+    *   `GEMINI_UPSTREAM_URL`: The URL of the GEMINI upstream API, as `https://generativelanguage.googleapis.com/v1beta`. This is typically set in `wrangler.jsonc`.
+    *   `OPENAI_UPSTREAM_URL`: The URL of the OPENAI upstream API, as `https://generativelanguage.googleapis.com/v1beta/openai`. This is typically set in `wrangler.jsonc`.
+    *   `API_KEYS`: A list of API keys, separated by commas. This should be set using `wrangler secret put API_KEYS`.
+    *   `PROXY_API_KEY`: (Optional) A custom API key for request validation. This should be set using `wrangler secret put PROXY_API_KEY`.
+
+    If `PROXY_API_KEY` is set, incoming API proxy requests must include this key for authentication. Clients can provide the key in one of two ways:
         *   **For OpenAI-style requests:** Include an `Authorization: Bearer <key>` header.
         *   **For Gemini-style requests:** Include a `key=<key>` query parameter in the URL.
 
     You can configure environment variables using the following commands:
 
     ```bash
-    npx wrangler secret put UPSTREAM_API_URL
+    ```bash
     npx wrangler secret put API_KEYS
+    npx wrangler secret put PROXY_API_KEY
     ```
 
-    You can configure environment variables in the `wrangler.json` file:
+    You can configure `GEMINI_UPSTREAM_URL` and `OPENAI_UPSTREAM_URL` in the `wrangler.jsonc` file:
 
     ```json
     "vars": {
@@ -50,7 +47,7 @@ Support and automatically recognize API requests in Gemini and OpenAI styles.
 
     **Note:** Environment variables configured using the `wrangler secret put` command are stored encrypted and are more secure.
 
-4.  **Deploy Worker:**
+3.  **Deploy Worker:**
 
     ```bash
     npx wrangler deploy
@@ -58,10 +55,10 @@ Support and automatically recognize API requests in Gemini and OpenAI styles.
 
 ## `wrangler` Command Usage
 
-*   `wrangler login`: Configure Cloudflare account.
-*   `wrangler secret put <key>`: Configure encrypted environment variables.
-*   `wrangler deploy`: Deploy Worker.
-*   `wrangler dev`: Develop and test Worker locally.
+*   `npx wrangler login`: Configure Cloudflare account.
+*   `npx wrangler secret put <key>`: Configure encrypted environment variables.
+*   `npx wrangler deploy`: Deploy Worker.
+*   `npx wrangler dev`: Develop and test Worker locally.
 
 ## Error Handling
 
