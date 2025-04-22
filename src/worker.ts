@@ -34,12 +34,9 @@ async function handleHelloRequest(request: Request, env: Env): Promise<Response>
         console.error('Error fetching or processing hello.html template from ASSETS:', e);
         return new Response(`Error processing hello.html: ${e.message}\n${e.stack}`, { status: 500 });
     }
-    // Replace placeholder with configured upstream URLs
-    const upstreamInfo = `
-        Gemini: ${env.GEMINI_UPSTREAM_URL || 'Not Configured'}<br>
-        OpenAI: ${env.OPENAI_UPSTREAM_URL || 'Not Configured'}
-    `;
-    const html = htmlTemplate.replace('${UPSTREAM_API_URL_INFO}', upstreamInfo); // Assuming hello.html has a placeholder like ${UPSTREAM_API_URL_INFO}
+
+    const html = htmlTemplate.replace('${GEMINI_UPSTREAM_URL}', `${env.GEMINI_UPSTREAM_URL || 'Not Configured'}`)
+        .replace('${OPENAI_UPSTREAM_URL}', `${env.OPENAI_UPSTREAM_URL || 'Not Configured'}`);
 
     return new Response(html, {
         headers: { 'Content-Type': 'text/html; charset=utf-8' },

@@ -1,23 +1,198 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>API Key Usage Statistics</title>
     <style>
-        body { font-family: sans-serif; margin: 20px; background-color: #f4f4f4; }
-        h1 { color: #333; }
-        table { width: 80%; margin: 20px auto; border-collapse: collapse; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-        th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #ddd; }
-        th { background-color: #007bff; color: white; }
-        tr:hover { background-color: #f1f1f1; }
-        .container { max-width: 900px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
-        .error { color: red; font-weight: bold; }
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            margin: 20px;
+            background-color: #f8f9fa;
+            color: #212529;
+        }
+
+        .header-area {
+            background-color: #e9ecef;
+            padding: 20px 0;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        h1 {
+            color: #343a40;
+            margin: 0;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: auto;
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.08);
+        }
+
+        #countdown-area {
+            margin-bottom: 25px;
+            font-size: 1.1em;
+            color: #343a40;
+            text-align: center;
+        }
+
+        #countdown-area p {
+            margin: 0;
+        }
+
+        #countdown {
+            font-size: 1.4em;
+            font-weight: bold;
+            color: #007bff;
+            display: inline-block;
+            padding: 5px 10px;
+            background-color: #e9ecef;
+            border-radius: 4px;
+            margin-left: 5px;
+        }
+
+        table {
+            width: 100%;
+            margin: 20px 0;
+            border-collapse: collapse;
+            box-shadow: none;
+        }
+
+        th,
+        td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        th {
+            background-color: #e9ecef;
+            color: #495057;
+            font-weight: bold;
+        }
+
+        tr:hover {
+            background-color: #f1f1f1;
+        }
+
+        tr:nth-child(even) {
+            background-color: #f8f9fa;
+        }
+
+        .usage-badge {
+            display: inline-flex;
+            align-items: center;
+            font-size: 0.8em;
+            font-weight: 600;
+            line-height: 1;
+            text-align: center;
+            white-space: nowrap;
+            vertical-align: baseline;
+            border-radius: 0.25rem;
+            margin-right: 5px;
+            margin-bottom: 5px;
+            color: white;
+            overflow: hidden;
+        }
+
+        .usage-badge span {
+            padding: 0.35em 0.65em;
+        }
+
+        .usage-badge span:last-child {
+            border-left: 1px solid white;
+            margin-left: -1px;
+        }
+
+        /* Badge Colors */
+        .badge-secondary {
+            background-color: #6c757d;
+        }
+
+        .badge-primary {
+            background-color: #007bff;
+        }
+
+        .badge-success {
+            background-color: #28a745;
+        }
+
+        .badge-info {
+            background-color: #17a2b8;
+        }
+
+        .badge-warning {
+            background-color: #ffc107;
+            color: #212529;
+        }
+
+        .badge-danger {
+            background-color: #dc3545;
+        }
+
+        .badge-dark {
+            background-color: #343a40;
+        }
+
+        .badge-light {
+            background-color: #f8f9fa;
+            color: #212529;
+        }
+
+        /* Additional Colors */
+        .badge-purple {
+            background-color: #6f42c1;
+        }
+
+        .badge-pink {
+            background-color: #e83e8c;
+        }
+
+        .badge-teal {
+            background-color: #20c997;
+        }
+
+        .badge-cyan {
+            background-color: #17a2b8;
+        }
+
+        .badge-orange {
+            background-color: #fd7e14;
+        }
+
+        .badge-indigo {
+            background-color: #6610f2;
+        }
+
+        .badge-lime {
+            background-color: #cddc39;
+            color: #212529;
+        }
+
+        .badge-brown {
+            background-color: #795548;
+        }
+
+        .badge-blue-grey {
+            background-color: #607d8b;
+        }
+
+        .error {
+            color: #dc3545;
+            font-weight: bold;
+        }
     </style>
 </head>
+
 <body>
     <div class="container">
-        <h1>API Key Usage Statistics</h1>
+        <div class="header-area">
+            <h1>API Key Usage Statistics</h1>
+        </div>
         <div id="countdown-area">
             <p>Next Reset Countdown: <span id="countdown">Calculating...</span></p>
         </div>
@@ -32,7 +207,6 @@
             const statsContainer = document.getElementById('stats-container');
 
             const currentPath = window.location.pathname;
-            // Assuming the stat page is served from a path ending in /stat
             const modelUsagePath = currentPath.replace('/stat', '/model_usage');
             const fetchUrl = `${window.location.origin}${modelUsagePath}`;
 
@@ -59,13 +233,47 @@
 
                     data.forEach(item => {
                         const keyPartial = item.key ? item.key.substring(0, 8) + '...' : 'N/A';
-                        let usageDetails = 'No usage recorded';
+                        let usageDetailsHTML = 'No usage recorded';
                         if (item.usageCount && Object.keys(item.usageCount).length > 0) {
-                            usageDetails = Object.entries(item.usageCount)
-                                .map(([model, count]) => `${model}: ${count}`)
-                                .join(', ');
+                            // List of available badge color classes
+                            const badgeColorClasses = [
+                                'badge-primary',
+                                'badge-success',
+                                'badge-info',
+                                'badge-warning',
+                                'badge-danger',
+                                'badge-dark',
+                                'badge-purple',
+                                'badge-pink',
+                                'badge-teal',
+                                'badge-orange',
+                                'badge-indigo',
+                                'badge-lime',
+                                'badge-brown',
+                                'badge-blue-grey'
+                            ];
+
+                            // Simple deterministic hash function to get a color index based on model name
+                            const getModelColorClass = (modelName) => {
+                                let hash = 0;
+                                for (let i = 0; i < modelName.length; i++) {
+                                    const char = modelName.charCodeAt(i);
+                                    hash = ((hash << 5) - hash) + char;
+                                    hash = hash & hash; // Convert to 32bit integer
+                                }
+                                const colorIndex = Math.abs(hash) % badgeColorClasses.length;
+                                return badgeColorClasses[colorIndex];
+                            };
+
+                            usageDetailsHTML = Object.entries(item.usageCount)
+                                .map(([model, count]) => {
+                                    const badgeClass = getModelColorClass(model);
+                                    // Use two spans within the badge for model name and count
+                                    return `<span class="usage-badge ${badgeClass}"><span>${model}</span><span>${count}</span></span>`;
+                                })
+                                .join(''); // Join without separator
                         }
-                        tableHTML += `<tr><td>${keyPartial}</td><td>${usageDetails}</td></tr>`;
+                        tableHTML += `<tr><td>${keyPartial}</td><td>${usageDetailsHTML}</td></tr>`;
                     });
 
                     tableHTML += '</tbody>';
@@ -96,7 +304,7 @@
 
             // If current UTC time is past today's reset time, set reset time for tomorrow
             if (nowUtcTimestamp >= todayResetUtcTimestamp) {
-                 nextResetTimeTimestamp = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 7, 0, 0);
+                nextResetTimeTimestamp = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 7, 0, 0);
             }
 
             const timeDiff = nextResetTimeTimestamp - nowUtcTimestamp; // Difference in milliseconds
@@ -119,4 +327,5 @@
         setInterval(updateCountdown, 1000);
     </script>
 </body>
+
 </html>
