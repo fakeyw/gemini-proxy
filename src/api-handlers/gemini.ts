@@ -16,14 +16,13 @@ export class GeminiHandler implements ApiHandler {
         // Check if path includes '/models/' and ends with a Gemini action suffix
         // This covers both /v1beta/models/... and /models/... patterns
         const hasModelsSegment = path.includes('/models/');
-        const hasActionSuffix = path.endsWith(':generateContent') || path.endsWith(':embedContent'); // Add other actions if needed
+        const hasActionSuffix = path.endsWith(':generateContent') || path.endsWith(':embedContent') || path.endsWith(':streamGenerateContent')
         return hasModelsSegment && hasActionSuffix;
     }
 
     async parseModelName(request: Request): Promise<string | null> {
         try {
             const url = new URL(request.url);
-            // Extract model name from path, e.g., /v1beta/models/gemini-pro:generateContent
             const match = url.pathname.match(/\/models\/([^/:]+)/);
             if (match && match[1]) {
                 return match[1];
@@ -50,12 +49,19 @@ export class GeminiHandler implements ApiHandler {
         return null;
     }
 
-    buildUpstreamRequest(request: Request, apiKey: string, modelName: string, env: Env): Request {
+    buildUpstreamRequest(request: Request, apiKey: string | null, modelName: string, env: Env): Request {
         const url = new URL(request.url);
         const params = new URLSearchParams(url.search);
-        params.set('key', apiKey); // Set or replace the 'key' parameter
+        if (apiKey !== null) { // Only set if internal key provided
+            params.set('key', apiKey);
+        }
 
-        const upstreamUrl = `${env.GEMINI_UPSTREAM_URL}${url.pathname}?${params.toString()}`;
+        let pathname = url.pathname;
+        // for roo code compatible
+        if (pathname.startsWith('/v1beta/')) {
+            pathname = pathname.substring('/v1beta'.length);
+        }
+        const upstreamUrl = `${env.GEMINI_UPSTREAM_URL}${pathname}?${params.toString()}`;
 
         console.log("Gemini real redirect url = ", upstreamUrl);
 
@@ -63,9 +69,7 @@ export class GeminiHandler implements ApiHandler {
             method: request.method,
             headers: (() => {
                 const headers = new Headers(request.headers);
-                // Do NOT include Authorization header for Gemini
-                headers.delete('Authorization');
-                // Keep other headers
+                headers.delete('Authorization'); // Keep this as it might interfere
                 return headers;
             })(),
             body: request.body,

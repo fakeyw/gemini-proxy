@@ -52,7 +52,7 @@ export class OpenAIHandler implements ApiHandler {
         return null;
     }
 
-    buildUpstreamRequest(request: Request, apiKey: string, modelName: string, env: Env): Request {
+    buildUpstreamRequest(request: Request, apiKey: string | null, modelName: string, env: Env): Request {
         let upstreamUrl = env.OPENAI_UPSTREAM_URL || "https://api.openai.com/v1/";
         const requestPath = new URL(request.url).pathname;
 
@@ -65,8 +65,10 @@ export class OpenAIHandler implements ApiHandler {
             method: request.method,
             headers: (() => {
                 const headers = new Headers(request.headers);
-                headers.delete('Authorization');
-                headers.set('Authorization', `Bearer ${apiKey}`);
+                headers.delete('Authorization'); // Always remove original
+                if (apiKey !== null) { // Only set if internal key provided
+                    headers.set('Authorization', `Bearer ${apiKey}`);
+                }
                 return headers;
             })(),
             body: request.body,

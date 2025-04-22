@@ -29,7 +29,7 @@ export interface ApiHandler {
     /**
      * Builds the upstream request based on the original request, API key, model name, and environment.
      */
-    buildUpstreamRequest(request: Request, apiKey: string, modelName: string, env: Env): Request;
+    buildUpstreamRequest(request: Request, apiKey: string | null, modelName: string, env: Env): Request;
 
     /**
      * Optional: Handles specific upstream errors (e.g., 429) and determines if a retry is needed.

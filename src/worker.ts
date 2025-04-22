@@ -52,7 +52,6 @@ async function handleHelloRequest(request: Request, env: Env): Promise<Response>
 async function getApiKey(managerStub: DurableObjectStub, modelName: string, apiType: string): Promise<string> {
     let apiKeyResponse: Response;
     try {
-        // Pass the modelName as a query parameter
         apiKeyResponse = await managerStub.fetch(`https://internal-do/getKey?model=${encodeURIComponent(modelName)}&api_type=${encodeURIComponent(apiType)}`);
     } catch (err) {
         console.error("Error fetching key from Durable Object:", err);
@@ -92,11 +91,11 @@ function handleUpstream429(apiKey: string, managerStub: DurableObjectStub, ctx: 
 /**
  * Main handler for proxying API requests with key rotation and retries.
  */
-async function handleApiProxy(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> { // Ensure Request/ExecutionContext/Response use imported types
-    console.log(`[handleApiProxy] Request received: ${request.method} ${request.url}`);
+async function handleApiProxy(request: Request, env: Env, ctx: ExecutionContext, useInternalKeyManager: boolean): Promise<Response> { // Ensure Request/ExecutionContext/Response use imported types
+    console.log(`[handleApiProxy] Request received: ${request.method} ${request.url}, useInternalKeyManager: ${useInternalKeyManager}`);
     const doId = env.API_KEY_MANAGER.idFromName("global-api-key-manager");
     const managerStub = env.API_KEY_MANAGER.get(doId);
-    const maxRetries = 5;
+    const maxRetries = useInternalKeyManager ? 5 : 1; // Only retry if using internal keys
     let retries = 0;
 
     // Dynamically determine the handler based on the request
@@ -113,14 +112,20 @@ async function handleApiProxy(request: Request, env: Env, ctx: ExecutionContext)
     await console.log(`[handleApiProxy] Determined API Type: ${handler.apiType}, Model Name: ${modelName || 'N/A'}`);
 
     while (retries < maxRetries) {
-        let apiKey: string;
-        try {
-            apiKey = await getApiKey(managerStub, modelName, handler.apiType);
-        } catch (error: any) {
-            console.error(`[handleApiProxy] Error getting API key for model ${modelName}: ${error.message}`);
-            const status = error.message.includes("all API key") ? 429 : 500;
-            return new Response(error.message, { status });
+        let apiKey: string | null = null; // Initialize apiKey as null
+
+        if (useInternalKeyManager) {
+            try {
+                apiKey = await getApiKey(managerStub, modelName, handler.apiType);
+            } catch (error: any) {
+                console.error(`[handleApiProxy] Error getting internal API key for model ${modelName}: ${error.message}`);
+                const status = error.message.includes("all API key") ? 429 : 500;
+                return new Response(error.message, { status });
+            }
+        } else {
+            console.log(`[handleApiProxy] Not using internal API key manager. Forwarding with original request headers.`);
         }
+
 
         try {
             const upstreamRequest = handler.buildUpstreamRequest(request.clone(), apiKey, modelName, env);
@@ -142,36 +147,44 @@ async function handleApiProxy(request: Request, env: Env, ctx: ExecutionContext)
                 console.error(`[handleApiProxy] Failed to log response body: ${e}`);
             }
 
-            if (upstreamResponse.status === 429) {
-                console.log(`[handleApiProxy] Upstream returned 429 for model ${modelName}. Handling exhaustion and retrying.`);
-                handleUpstream429(apiKey, managerStub, ctx, modelName);
-                console.log(`[handleApiProxy] Retrying request for model ${modelName}... (attempt ${retries + 1}/${maxRetries})`);
-                retries++;
-                await new Promise(resolve => setTimeout(resolve, 100));
-                continue;
+
+            if (useInternalKeyManager) {
+                if (upstreamResponse.status === 429) {
+                    console.log(`[handleApiProxy] Upstream returned 429 for model ${modelName}. Handling exhaustion and retrying.`);
+                    if (apiKey) {
+                        handleUpstream429(apiKey, managerStub, ctx, modelName);
+                    }
+                    console.log(`[handleApiProxy] Retrying request for model ${modelName}... (attempt ${retries + 1}/${maxRetries})`);
+                    retries++;
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    continue;
+                }
+
+                if (modelName != '' && upstreamResponse.ok) {
+                    console.log(`[handleApiProxy] Request succeeded (status ${upstreamResponse.status}) for model ${modelName}, using key ${apiKey ? apiKey.substring(0, 5) + '...' : 'N/A'}. Incrementing usage.`);
+                    if (apiKey) { // Ensure apiKey is not null before incrementing usage
+                        const incrementUrl = `https://internal-do/incrementUsage?key=${encodeURIComponent(apiKey)}&model=${encodeURIComponent(modelName)}`;
+                        ctx.waitUntil(
+                            managerStub.fetch(incrementUrl, { method: 'POST' })
+                                .then(async (res) => {
+                                    if (!res.ok) {
+                                        console.error(`[handleApiProxy] Failed incr key cnt ${apiKey.substring(0, 5)}... model ${modelName}: ${await res.text()}`);
+                                    } else {
+                                        console.log(`[handleApiProxy] Key usage incremented for ${apiKey.substring(0, 5)}... model ${modelName}`);
+                                    }
+                                })
+                                .catch(err => console.error(`[handleApiProxy] Error calling incrementUsage for key ${apiKey.substring(0, 5)}... model ${modelName}:`, err))
+                        );
+                    }
+                }
             }
 
-            if (modelName != '') {
-                console.log(`[handleApiProxy] Request succeeded or non-quota error (status ${upstreamResponse.status}) for model ${modelName}, using key ${apiKey.substring(0, 5)}...`);
-                const incrementUrl = `https://internal-do/incrementUsage?key=${encodeURIComponent(apiKey)}&model=${encodeURIComponent(modelName)}`;
-                ctx.waitUntil(
-                    managerStub.fetch(incrementUrl, { method: 'POST' })
-                        .then(async (res) => {
-                            if (!res.ok) {
-                                console.error(`[handleApiProxy] Failed incr key cnt ${apiKey.substring(0, 5)}... model ${modelName}: ${await res.text()}`);
-                            } else {
-                                console.log(`[handleApiProxy] Key usage incremented for ${apiKey.substring(0, 5)}... model ${modelName}`);
-                            }
-                        })
-                        .catch(err => console.error(`[handleApiProxy] Error calling incrementUsage for key ${apiKey.substring(0, 5)}... model ${modelName}:`, err))
-                );
-            }
 
             const responseHeaders = new Headers(upstreamResponse.headers);
             // Remove potentially problematic headers that Cloudflare Workers handles automatically
             responseHeaders.delete('Content-Length');
             responseHeaders.delete('Transfer-Encoding');
-            responseHeaders.set('X-Proxied-By', 'Cloudflare-Worker'); // Add custom header
+            responseHeaders.set('X-Proxied-By', useInternalKeyManager ? 'Cloudflare-Worker' : 'Cloudflare-Worker-Direct'); // Indicate proxy type
 
             console.log(`[handleApiProxy] Returning response to client with status: ${upstreamResponse.status}`);
             return new Response(upstreamResponse.body, {
@@ -181,7 +194,7 @@ async function handleApiProxy(request: Request, env: Env, ctx: ExecutionContext)
             });
 
         } catch (error: any) {
-            console.error(`[handleApiProxy] Error during upstream request for model ${modelName} with key ${apiKey.substring(0, 5)}...:`, error);
+            console.error(`[handleApiProxy] Error during upstream request for model ${modelName} with key ${apiKey ? apiKey.substring(0, 5) + '...' : 'N/A'}:`, error);
             return new Response(error.message || "Error proxying request to upstream API", { status: 502 }); // Bad Gateway might be appropriate
         }
     }
@@ -189,7 +202,6 @@ async function handleApiProxy(request: Request, env: Env, ctx: ExecutionContext)
     console.error(`[handleApiProxy] Maximum number of retries reached (${maxRetries}). Request failed for model ${modelName}.`);
     return new Response(`Unable to process request after ${maxRetries} attempts using different keys for model ${modelName}. All keys may be exhausted for this model or the upstream service is unavailable.`, { status: 503 }); // Service Unavailable
 }
-
 
 // --- Worker Entrypoint ---
 
@@ -243,21 +255,28 @@ export default {
                 console.error(`[fetch] Could not determine API type from request: ${request.method} ${request.url}`);
                 return new Response('unknown api type.', { status: 400 });
             }
+
             const clientApiKey = handler.parseApiKey(request.clone());
             const configuredApiKey = env.PROXY_API_KEY;
 
-            if (configuredApiKey && configuredApiKey !== "") {
-                console.log(clientApiKey, handler.apiType);
-                if (!clientApiKey || clientApiKey !== configuredApiKey) {
-                    console.warn(`[fetch] API Key validation failed for request: ${request.method} ${request.url}`);
-                    return new Response('Invalid or missing API Key.', { status: 401 });
-                }
-                console.log(`[fetch] API Key validated successfully for request: ${request.method} ${request.url}`);
-            } else {
-                console.log(`[fetch] PROXY_API_KEY not configured. Skipping API Key validation.`);
+            let modelName = await handler.parseModelName(request.clone());
+            modelName = modelName === null ? "" : modelName; // Use empty string if model name is null
+
+            // When roo code use custom url prefix，the api key (which is obviously set) not work on request.
+            // It maybe a bug.
+            const useInternalKeyManager = handler.apiType == "gemini" ||
+                (clientApiKey !== null
+                    && configuredApiKey !== undefined
+                    && configuredApiKey !== ""
+                    && clientApiKey === configuredApiKey);
+
+            if (clientApiKey !== null && configuredApiKey !== undefined && configuredApiKey !== "" && clientApiKey !== configuredApiKey) {
+                console.warn(`[fetch] API Key validation failed for request: ${request.method} ${request.url}`);
+                return new Response('Invalid API Key.', { status: 401 });
             }
 
-            return handleApiProxy(request, env, ctx);
+            console.log(`[fetch] useInternalKeyManager = ${useInternalKeyManager}.`);
+            return handleApiProxy(request, env, ctx, useInternalKeyManager);
         }
     },
 
