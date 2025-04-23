@@ -12,7 +12,14 @@
             }
         ]
     },
-    "migrations": [],
+    "migrations": [
+        {
+            "tag": "v1",
+            "new_sqlite_classes": [
+                "ApiKeyManager"
+            ]
+        }
+    ],
     "vars": {
         "GEMINI_UPSTREAM_URL": "https://generativelanguage.googleapis.com/v1beta",
         "OPENAI_UPSTREAM_URL": "https://generativelanguage.googleapis.com/v1beta/openai"
