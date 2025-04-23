@@ -185,6 +185,20 @@
             color: #dc3545;
             font-weight: bold;
         }
+    .exhausted-model {
+        background-color: #6c757d !important; /* Override specific badge color with grey */
+        cursor: pointer;
+    }
+    #reason-display {
+        margin-top: 20px;
+        padding: 15px;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        background-color: #f8f9fa;
+        font-family: monospace;
+        white-space: pre-wrap; /* Preserve formatting */
+        word-break: break-word;
+    }
     </style>
 </head>
 
@@ -199,6 +213,9 @@
 
         <div id="stats-container">
             <p>Loading statistics...</p>
+        </div>
+        <div id="reason-display" style="display: none; margin-top: 20px; padding: 15px; border: 1px solid #dee2e6; border-radius: 4px; background-color: #f8f9fa;">
+            <!-- Reason will be displayed here -->
         </div>
     </div>
 
@@ -268,8 +285,13 @@
                             usageDetailsHTML = Object.entries(item.usageCount)
                                 .map(([model, count]) => {
                                     const badgeClass = getModelColorClass(model);
-                                    // Use two spans within the badge for model name and count
-                                    return `<span class="usage-badge ${badgeClass}"><span>${model}</span><span>${count}</span></span>`;
+                                    const isExhausted = item.exhaustedModels?.includes(model); // Check if exhausted
+                                    const reason = item.exhaustedReasons?.[model] || '无原因'; // Get reason
+                                    const extraClass = isExhausted ? ' exhausted-model' : ''; // Add class if exhausted
+                                    const dataAttr = isExhausted ? ` data-reason="${escapeHtml(reason)}"` : ''; // Add data attribute if exhausted
+
+                                    // Add extraClass and dataAttr to the outer span
+                                    return `<span class="usage-badge ${badgeClass}${extraClass}"${dataAttr}><span>${model}</span><span>${count}</span></span>`;
                                 })
                                 .join(''); // Join without separator
                         }
@@ -325,6 +347,28 @@
         // Initial call and update every second
         updateCountdown();
         setInterval(updateCountdown, 1000);
+        const reasonDisplay = document.getElementById('reason-display');
+        statsContainer.addEventListener('click', (event) => {
+            const badge = event.target.closest('.exhausted-model');
+            if (badge && reasonDisplay) {
+                const reason = badge.getAttribute('data-reason');
+                reasonDisplay.textContent = reason;
+                reasonDisplay.style.display = 'block';
+            } else if (reasonDisplay && !event.target.closest('#reason-display')) {
+                 reasonDisplay.style.display = 'none';
+            }
+        });
+
+        // Helper function to escape HTML (important for displaying reason)
+        function escapeHtml(unsafe) {
+            if (!unsafe) return '';
+            return unsafe
+                 .replace(/&/g, "&")
+                 .replace(/</g, "<")
+                 .replace(/>/g, ">")
+                 .replace(/"/g, "\"")
+                 .replace(/'/g, "&#039;");
+        }
     </script>
 </body>
 

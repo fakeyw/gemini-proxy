@@ -37,6 +37,12 @@ export class ApiKeyManager {
                     keyData.exhaustedModels = [];
                 }
             });
+            // Ensure exhaustedReasons exists (for compatibility with older states)
+            this.keysState.forEach(keyData => {
+                if (keyData.exhaustedReasons === undefined) {
+                    keyData.exhaustedReasons = {};
+                }
+            });
 
         } else {
             if (stored?.keys && stored.currentIndex !== undefined) {
@@ -158,31 +164,31 @@ export class ApiKeyManager {
      * @returns {Promise<Response>} - Returns a Promise that resolves to a Response object representing the operation result.
      */
     async handleMarkExhausted(request: Request): Promise<Response> {
-        const url = new URL(request.url);
-        const apiKeyToMark = url.searchParams.get("key");
-        const modelName = url.searchParams.get("model");
-
-        if (!apiKeyToMark) {
-            return new Response("Missing 'key' query parameter", { status: 400 });
+        if (request.method !== "POST") {
+             return new Response("Method Not Allowed", { status: 405 });
         }
-        if (!modelName) {
-            return new Response("Missing 'model' query parameter", { status: 400 });
+        const { key: apiKeyToMark, model: modelName, reason } = await request.json<{ key: string; model: string; reason: string }>();
+
+        if (!apiKeyToMark || !modelName || reason === undefined) {
+            return new Response("Missing 'key', 'model', or 'reason' in request body", { status: 400 });
         }
 
         const keyIndex = this.keysState.findIndex(k => k.key === apiKeyToMark);
 
         if (keyIndex !== -1) {
             const keyData = this.keysState[keyIndex];
-            if (!keyData.exhaustedModels.includes(modelName)) { // Check if model is already listed
-                keyData.exhaustedModels.push(modelName); // Add model to the list
-                console.log(`Marking key ${apiKeyToMark.substring(0, 5)}... (index ${keyIndex}) as exhausted for model ${modelName}.`);
-                await this.saveState();
-                return new Response(`Marked key ${apiKeyToMark.substring(0, 5)}... as exhausted for model ${modelName}`, { status: 200 });
-            } else {
-                console.log(`Key ${apiKeyToMark.substring(0, 5)}... (index ${keyIndex}) was already marked as exhausted for model ${modelName}.`);
-                // Return 200 OK even if already marked, as the state is consistent with the request
-                return new Response(`Key ${apiKeyToMark.substring(0, 5)}... already exhausted for model ${modelName}`, { status: 200 });
+            // Ensure exhaustedReasons exists
+            if (!keyData.exhaustedReasons) {
+                keyData.exhaustedReasons = {};
             }
+            if (!keyData.exhaustedModels.includes(modelName)) {
+                keyData.exhaustedModels.push(modelName);
+            }
+            // Store or update the reason
+            keyData.exhaustedReasons[modelName] = reason;
+            console.log(`Marking key ${apiKeyToMark.substring(0, 5)}... (index ${keyIndex}) as exhausted for model ${modelName}. Reason: ${reason}`);
+            await this.saveState();
+            return new Response(`Marked key ${apiKeyToMark.substring(0, 5)}... as exhausted for model ${modelName}`, { status: 200 });
         } else {
             console.log(`Key not found: ${apiKeyToMark.substring(0, 5)}...`);
             return new Response("Key not found", { status: 404 });
@@ -203,10 +209,11 @@ export class ApiKeyManager {
         this.keysState.forEach(keyData => {
             keyData.exhaustedModels = []; // Reset exhausted models
             keyData.usageCount = {}; // Reset usage count
+            keyData.exhaustedReasons = {}; // 新增：清空耗尽原因
         });
         this.currentIndex = 0; // Reset index
         await this.saveState();
-        return new Response("All API key exhausted model lists and usage counts have been reset", { status: 200 });
+        return new Response("All API key exhausted model lists, usage counts, and reasons have been reset", { status: 200 });
     }
     /**
      * @description Handles the /incrementUsage route, increments the usage count for a specific key and model.
@@ -261,10 +268,12 @@ export class ApiKeyManager {
 
         console.log("Providing all API key usage statistics.");
 
-        // Return a simplified structure containing only key and usageCount
+        // Return a structure containing key, usageCount, exhaustedModels, and exhaustedReasons
         const stats = this.keysState.map(keyData => ({
             key: keyData.key,
-            usageCount: keyData.usageCount || {} // Ensure usageCount is an object even if undefined
+            usageCount: keyData.usageCount || {}, // Ensure usageCount is an object even if undefined
+            exhaustedModels: keyData.exhaustedModels || [], // Include exhausted models
+            exhaustedReasons: keyData.exhaustedReasons || {} // Include reasons
         }));
 
         return new Response(JSON.stringify(stats), {

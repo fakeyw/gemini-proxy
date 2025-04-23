@@ -35,12 +35,17 @@ export async function getApiKey(managerStub: DurableObjectStub, modelName: strin
 /**
  * Handles the upstream 429 response by marking the key as exhausted in the DO.
  */
-export function handleUpstream429(apiKey: string, managerStub: DurableObjectStub, ctx: ExecutionContext, modelName: string): void { // Ensure DurableObjectStub/ExecutionContext use imported types
-    console.warn(`API key ${apiKey.substring(0, 5)}... may be exhausted for model ${modelName} (status 429). Marking as exhausted and retrying.`);
-    const markRequest = new Request(`https://internal-do/markExhausted?key=${encodeURIComponent(apiKey)}&model=${encodeURIComponent(modelName)}`, { method: 'POST' });
+export function handleUpstream429(apiKey: string, managerStub: DurableObjectStub, ctx: ExecutionContext, modelName: string, reason: string): void { // Added reason parameter
+    console.warn(`API key ${apiKey.substring(0, 5)}... may be exhausted for model ${modelName} (status 429). Reason: ${reason}. Marking as exhausted.`);
+    // Removed query parameters from URL
+    const markRequest = new Request(`https://internal-do/markExhausted`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }, // Added header
+        body: JSON.stringify({ key: apiKey, model: modelName, reason: reason }) // Added body
+    });
     try {
-        ctx.waitUntil(managerStub.fetch(markRequest).catch(err => console.error(`mark key ${apiKey.substring(0, 5)} exhausted at ${modelName}:`, err)));
+        ctx.waitUntil(managerStub.fetch(markRequest).catch(err => console.error(`Failed to mark key ${apiKey.substring(0, 5)} exhausted for model ${modelName}:`, err)));
     } catch (err) {
-        console.error(`set key ${apiKey.substring(0, 5)}... exhausted for model ${modelName} failed: `, err);
+        console.error(`Error scheduling key exhaustion update for ${apiKey.substring(0, 5)}... model ${modelName}: `, err);
     }
 }

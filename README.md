@@ -75,4 +75,12 @@ This project resets the status of all keys daily at GMT+8 15:00 (UTC 07:00) via 
 
 ## Model Usage Statistics Page (`/stat`)
 
-This project includes a `/stat` page that displays model usage statistics. You can access this page at the `/stat` path.
+This project includes a `/stat` page that displays API key and model usage statistics. You can access this page at the `/stat` path.
+
+**Features:**
+
+*   **Model Usage Display**: Shows the usage count for each model under each API key.
+*   **Exhausted Key/Model Marking**: API keys that are exhausted for a specific model (due to upstream 429 errors) are marked on the page.
+*   **Exhaustion Reason Display**: Clicking on a marked exhausted model reveals the specific reason provided by the upstream API for the exhaustion.
+
+![Statistics Page Example](/asset/stat_display.png)

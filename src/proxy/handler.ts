@@ -70,12 +70,20 @@ export async function handleApiProxy(request: Request, env: Env, ctx: ExecutionC
                 if (upstreamResponse.status === 429) {
                     console.log(`[handleApiProxy] Upstream returned 429 for model ${modelName}. Handling exhaustion and retrying.`);
                     if (apiKey) {
-                        handleUpstream429(apiKey, managerStub, ctx, modelName);
+                        // Read the reason from the 429 response body
+                        let reason = "Unknown reason"; // Default reason
+                        try {
+                            // Clone response to read body without consuming it for potential retry logic (though retry logic might change)
+                            reason = await upstreamResponse.clone().text();
+                        } catch (e) {
+                            console.error("Failed to read reason from 429 response body:", e);
+                        }
+                        handleUpstream429(apiKey, managerStub, ctx, modelName, reason); // Pass reason
                     }
                     console.log(`[handleApiProxy] Retrying request for model ${modelName}... (attempt ${retries + 1}/${maxRetries})`);
                     retries++;
                     await new Promise(resolve => setTimeout(resolve, 100));
-                    continue;
+                    continue; // Retry the loop
                 }
 
                 if (modelName != '' && upstreamResponse.ok) {
