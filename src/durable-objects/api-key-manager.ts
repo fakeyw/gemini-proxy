@@ -165,7 +165,7 @@ export class ApiKeyManager {
      */
     async handleMarkExhausted(request: Request): Promise<Response> {
         if (request.method !== "POST") {
-             return new Response("Method Not Allowed", { status: 405 });
+            return new Response("Method Not Allowed", { status: 405 });
         }
         const { key: apiKeyToMark, model: modelName, reason } = await request.json<{ key: string; model: string; reason: string }>();
 

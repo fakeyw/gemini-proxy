@@ -19,6 +19,7 @@
             text-align: center;
             margin-bottom: 20px;
         }
+
         h1 {
             color: #343a40;
             margin: 0;
@@ -185,20 +186,24 @@
             color: #dc3545;
             font-weight: bold;
         }
-    .exhausted-model {
-        background-color: #6c757d !important; /* Override specific badge color with grey */
-        cursor: pointer;
-    }
-    #reason-display {
-        margin-top: 20px;
-        padding: 15px;
-        border: 1px solid #dee2e6;
-        border-radius: 4px;
-        background-color: #f8f9fa;
-        font-family: monospace;
-        white-space: pre-wrap; /* Preserve formatting */
-        word-break: break-word;
-    }
+
+        .exhausted-model {
+            background-color: #6c757d !important;
+            /* Override specific badge color with grey */
+            cursor: pointer;
+        }
+
+        #reason-display {
+            margin-top: 20px;
+            padding: 15px;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            background-color: #f8f9fa;
+            font-family: monospace;
+            white-space: pre-wrap;
+            /* Preserve formatting */
+            word-break: break-word;
+        }
     </style>
 </head>
 
@@ -214,7 +219,8 @@
         <div id="stats-container">
             <p>Loading statistics...</p>
         </div>
-        <div id="reason-display" style="display: none; margin-top: 20px; padding: 15px; border: 1px solid #dee2e6; border-radius: 4px; background-color: #f8f9fa;">
+        <div id="reason-display"
+            style="display: none; margin-top: 20px; padding: 15px; border: 1px solid #dee2e6; border-radius: 4px; background-color: #f8f9fa;">
             <!-- Reason will be displayed here -->
         </div>
     </div>
@@ -355,7 +361,7 @@
                 reasonDisplay.textContent = reason;
                 reasonDisplay.style.display = 'block';
             } else if (reasonDisplay && !event.target.closest('#reason-display')) {
-                 reasonDisplay.style.display = 'none';
+                reasonDisplay.style.display = 'none';
             }
         });
 
@@ -363,11 +369,11 @@
         function escapeHtml(unsafe) {
             if (!unsafe) return '';
             return unsafe
-                 .replace(/&/g, "&")
-                 .replace(/</g, "<")
-                 .replace(/>/g, ">")
-                 .replace(/"/g, "\"")
-                 .replace(/'/g, "&#039;");
+                .replace(/&/g, "&")
+                .replace(/</g, "<")
+                .replace(/>/g, ">")
+                .replace(/"/g, "\"")
+                .replace(/'/g, "&#039;");
         }
     </script>
 </body>

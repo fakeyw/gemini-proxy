@@ -1,42 +1,48 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Welcome to the LLM API Proxy!</title>
-        <style>
-            body {
-                font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-                margin: 20px;
-                background-color: #f8f9fa;
-                color: #212529;
-                line-height: 1.6; /* Keep line height for readability */
-            }
-            .header-area {
-                background-color: #e9ecef;
-                padding: 20px 0;
-                text-align: center;
-                margin-bottom: 20px;
-            }
-            h1 {
-                color: #343a40;
-                margin: 0;
-            }
-            .container {
-                max-width: 900px; /* Use 900px for consistency with stat.html */
-                margin: auto;
-                background: white;
-                padding: 30px; /* Use 30px for consistency with stat.html */
-                border-radius: 8px;
-                box-shadow: 0 0 15px rgba(0,0,0,0.08); /* Use 15px for consistency with stat.html */
-            }
-            code {
-                background-color: #eee;
-                padding: 0.2em 0.4em;
-                border-radius: 3px;
-            }
-        </style>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            margin: 20px;
+            background-color: #f8f9fa;
+            color: #212529;
+            line-height: 1.6;
+        }
+
+        .header-area {
+            background-color: #e9ecef;
+            padding: 20px 0;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        h1 {
+            color: #343a40;
+            margin: 0;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: auto;
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.08);
+        }
+
+        code {
+            background-color: #eee;
+            padding: 0.2em 0.4em;
+            border-radius: 3px;
+        }
+    </style>
 </head>
+
 <body>
     <div class="container">
         <div class="header-area">
@@ -47,15 +53,17 @@
             <li>Gemini API URL: <code>${GEMINI_UPSTREAM_URL}</code></li>
             <li>OpenAI API URL: <code>${OPENAI_UPSTREAM_URL}</code></li>
         </ul>
-            <p>It intelligently manages multiple API keys:</p>
+        <p>It intelligently manages multiple API keys:</p>
         <ul>
             <li>Rotates available API keys provided via the <code>API_KEYS</code> secret.</li>
             <li>Automatically marks keys as exhausted if the upstream API returns a 429 status code.</li>
             <li>Resets the status of all keys daily at GMT+8 15:00 (UTC 07:00) via a scheduled task.</li>
         </ul>
-        <p>To use the proxy, simply send your API requests to this worker's URL instead of directly to the LLM API URL.</p>
+        <p>To use the proxy, simply send your API requests to this worker's URL instead of directly to the LLM API URL.
+        </p>
         <hr>
         <p><small>You are seeing this page because you visited the <code>/</code> endpoint.</small></p>
     </div>
 </body>
+
 </html>
