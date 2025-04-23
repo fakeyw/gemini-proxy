@@ -172,7 +172,7 @@ async function handleApiProxy(request: Request, env: Env, ctx: ExecutionContext,
                 if (modelName != '' && upstreamResponse.ok) {
                     console.log(`[handleApiProxy] Request succeeded (status ${upstreamResponse.status}) for model ${modelName}, using key ${apiKey ? apiKey.substring(0, 5) + '...' : 'N/A'}. Incrementing usage.`);
                     if (apiKey) { // Ensure apiKey is not null before incrementing usage
-                        const incrementUrl = `https://internal-do/incrementUsage?key=${encodeURIComponent(apiKey)}&model=${encodeURIComponent(modelName)}`;
+                        const incrementUrl = `https://internal-do/incrementUsage?key=${encodeURIComponent(apiKey)}&model=${encodeURIComponent(modelName.split('/').pop() ?? modelName)}`;
                         ctx.waitUntil(
                             managerStub.fetch(incrementUrl, { method: 'POST' })
                                 .then(async (res) => {
