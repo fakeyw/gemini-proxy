@@ -40,6 +40,11 @@ export class GeminiHandler implements ApiHandler {
      * @returns The API key string or null if not found or in incorrect format.
      */
     parseApiKey(request: Request): string | null {
+        const headerApiKey = request.headers.get('x-goog-api-key');
+        if (headerApiKey) {
+            return headerApiKey;
+        }
+
         const url = new URL(request.url);
         const queryApiKey = url.searchParams.get('key');
         if (queryApiKey) {
@@ -52,12 +57,10 @@ export class GeminiHandler implements ApiHandler {
     buildUpstreamRequest(request: Request, apiKey: string | null, modelName: string, env: Env): Request {
         const url = new URL(request.url);
         const params = new URLSearchParams(url.search);
-        if (apiKey !== null) { // Only set if internal key provided
-            params.set('key', apiKey);
-        }
+        params.delete('key');
 
         let pathname = url.pathname;
-        // for roo code compatible
+        // FOR ROO CODE COMPITABLE
         if (pathname.startsWith('/v1beta/')) {
             pathname = pathname.substring('/v1beta'.length);
         }
@@ -69,7 +72,10 @@ export class GeminiHandler implements ApiHandler {
             method: request.method,
             headers: (() => {
                 const headers = new Headers(request.headers);
-                headers.delete('Authorization'); // Keep this as it might interfere
+                headers.delete('Authorization');
+                if (apiKey !== null) {
+                    headers.set('x-goog-api-key', apiKey);
+                }
                 return headers;
             })(),
             body: request.body,

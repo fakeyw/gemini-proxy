@@ -128,24 +128,33 @@ async function handleApiProxy(request: Request, env: Env, ctx: ExecutionContext,
 
 
         try {
+
+            /**
+             * All for difficult debug
+             */
             const upstreamRequest = handler.buildUpstreamRequest(request.clone(), apiKey, modelName, env);
-            console.log(`[handleApiProxy] Sending upstream request to: ${upstreamRequest.url}`);
-            // Log request body
-            try {
-                const requestBody = await upstreamRequest.clone().text();
-                console.log(`[handleApiProxy] Upstream request body: ${requestBody}`);
-            } catch (e) {
-                console.error(`[handleApiProxy] Failed to log request body: ${e}`);
-            }
+            // for (const [key, value] of upstreamRequest.headers.entries()) {
+            //     console.log(`[handleApiProxy] req_header ${key}: ${value}`);
+            // }
+            // console.log(`[handleApiProxy] Sending upstream request to: ${upstreamRequest.url}`);
+            // try {
+            //     const requestBody = await upstreamRequest.clone().text();
+            //     console.log(`[handleApiProxy] Upstream request body: ${requestBody}`);
+            // } catch (e) {
+            //     console.error(`[handleApiProxy] Failed to log request body: ${e}`);
+            // }
             const upstreamResponse = await fetch(upstreamRequest);
-            console.log(`[handleApiProxy] Received upstream response with status: ${upstreamResponse.status}`);
-            // Log response body
-            try {
-                const responseBody = await upstreamResponse.clone().text();
-                console.log(`[handleApiProxy] Upstream response body: ${responseBody}`);
-            } catch (e) {
-                console.error(`[handleApiProxy] Failed to log response body: ${e}`);
-            }
+            // console.log(`[handleApiProxy] Received upstream response with status: ${upstreamResponse.status}`);
+            // console.log(`[handleApiProxy] Upstream response headers:`);
+            // for (const [key, value] of upstreamResponse.headers.entries()) {
+            //     console.log(`[handleApiProxy]   ${key}: ${value}`);
+            // }
+            // try {
+            //     const responseBody = await upstreamResponse.clone().text();
+            //     console.log(`[handleApiProxy] Upstream response body: ${responseBody}`);
+            // } catch (e) {
+            //     console.error(`[handleApiProxy] Failed to log response body: ${e}`);
+            // }
 
 
             if (useInternalKeyManager) {
@@ -260,11 +269,9 @@ export default {
             const configuredApiKey = env.PROXY_API_KEY;
 
             let modelName = await handler.parseModelName(request.clone());
-            modelName = modelName === null ? "" : modelName; // Use empty string if model name is null
+            modelName = modelName === null ? "" : modelName;
 
-            // When roo code use custom url prefix，the api key (which is obviously set) not work on request.
-            // It maybe a bug.
-            const useInternalKeyManager = handler.apiType == "gemini" ||
+            const useInternalKeyManager =
                 (clientApiKey !== null
                     && configuredApiKey !== undefined
                     && configuredApiKey !== ""

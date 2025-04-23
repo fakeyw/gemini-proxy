@@ -30,7 +30,6 @@
     你可以使用以下命令配置环境变量：
 
     ```bash
-    ```bash
     npx wrangler secret put API_KEYS
     npx wrangler secret put PROXY_API_KEY
     ```

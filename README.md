@@ -31,7 +31,6 @@ Support and automatically recognize API requests in Gemini and OpenAI styles.
     You can configure environment variables using the following commands:
 
     ```bash
-    ```bash
     npx wrangler secret put API_KEYS
     npx wrangler secret put PROXY_API_KEY
     ```
