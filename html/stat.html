@@ -226,8 +226,8 @@
     </div>
 
     <script>
+        const statsContainer = document.getElementById('stats-container');
         document.addEventListener('DOMContentLoaded', () => {
-            const statsContainer = document.getElementById('stats-container');
 
             const currentPath = window.location.pathname;
             const modelUsagePath = currentPath.replace('/stat', '/model_usage');
@@ -294,7 +294,7 @@
                                     const isExhausted = item.exhaustedModels?.includes(model); // Check if exhausted
                                     const reason = item.exhaustedReasons?.[model] || '无原因'; // Get reason
                                     const extraClass = isExhausted ? ' exhausted-model' : ''; // Add class if exhausted
-                                    const dataAttr = isExhausted ? ` data-reason="${escapeHtml(reason)}"` : ''; // Add data attribute if exhausted
+                                    const dataAttr = isExhausted ? ` data-reason="${encodeBase64(reason)}"` : ''; // Add data attribute if exhausted
 
                                     // Add extraClass and dataAttr to the outer span
                                     return `<span class="usage-badge ${badgeClass}${extraClass}"${dataAttr}><span>${model}</span><span>${count}</span></span>`;
@@ -353,17 +353,29 @@
         // Initial call and update every second
         updateCountdown();
         setInterval(updateCountdown, 1000);
+
         const reasonDisplay = document.getElementById('reason-display');
         statsContainer.addEventListener('click', (event) => {
             const badge = event.target.closest('.exhausted-model');
             if (badge && reasonDisplay) {
-                const reason = badge.getAttribute('data-reason');
+                const encodedReason = badge.getAttribute('data-reason');
+                const reason = decodeBase64(encodedReason);
                 reasonDisplay.textContent = reason;
                 reasonDisplay.style.display = 'block';
             } else if (reasonDisplay && !event.target.closest('#reason-display')) {
                 reasonDisplay.style.display = 'none';
             }
         });
+
+        // Helper function to encode string to Base64
+        function encodeBase64(str) {
+            return btoa(unescape(encodeURIComponent(str)));
+        }
+
+        // Helper function to decode Base64 string
+        function decodeBase64(str) {
+            return decodeURIComponent(escape(atob(str)));
+        }
 
         // Helper function to escape HTML (important for displaying reason)
         function escapeHtml(unsafe) {
