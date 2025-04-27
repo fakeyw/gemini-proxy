@@ -24,7 +24,12 @@ export async function routeRequest(request: Request, env: Env, ctx: ExecutionCon
     } else if (url.pathname === '/model_usage' && request.method === 'GET') {
         return handleModelUsageRequest(request, env, managerStub);
     } else {
-        // Assume all other paths are API proxy requests
-        return handleApiRoute(request, env, ctx);
+        const allowedApiPrefixes = ['/chat', '/model', '/v1beta', '/embeddings'];
+        const isApiRoute = allowedApiPrefixes.some(prefix => url.pathname.startsWith(prefix));
+        if (isApiRoute) {
+            return handleApiRoute(request, env, ctx);
+        } else {
+            return new Response('Not Found', { status: 404 });
+        }
     }
 }
