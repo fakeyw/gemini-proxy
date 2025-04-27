@@ -18,7 +18,6 @@ export async function handleApiProxy(request: Request, env: Env, ctx: ExecutionC
     // The handler and modelName are passed as parameters.
 
     modelName = modelName === null ? "" : modelName;
-    await console.log(`[handleApiProxy] Determined API Type: ${handler.apiType}, Model Name: ${modelName || 'N/A'}`);
 
     while (retries < maxRetries) {
         let apiKey: string | null = null;
@@ -31,10 +30,7 @@ export async function handleApiProxy(request: Request, env: Env, ctx: ExecutionC
                 const status = error.message.includes("all API key") ? 429 : 500;
                 return new Response(error.message, { status });
             }
-        } else {
-            console.log(`[handleApiProxy] Not using internal API key manager. Forwarding with original request headers.`);
         }
-
 
         try {
 
@@ -65,7 +61,6 @@ export async function handleApiProxy(request: Request, env: Env, ctx: ExecutionC
             //     console.error(`[handleApiProxy] Failed to log response body: ${e}`);
             // }
 
-
             if (useInternalKeyManager) {
                 if (upstreamResponse.status === 429) {
                     console.log(`[handleApiProxy] Upstream returned 429 for model ${modelName}. Handling exhaustion and retrying.`);
@@ -81,11 +76,10 @@ export async function handleApiProxy(request: Request, env: Env, ctx: ExecutionC
                     console.log(`[handleApiProxy] Retrying request for model ${modelName}... (attempt ${retries + 1}/${maxRetries})`);
                     retries++;
                     await new Promise(resolve => setTimeout(resolve, 100));
-                    continue; // Retry the loop
+                    continue;
                 }
 
                 if (modelName != '' && upstreamResponse.ok) {
-                    console.log(`[handleApiProxy] Request succeeded (status ${upstreamResponse.status}) for model ${modelName}, using key ${apiKey ? apiKey.substring(0, 5) + '...' : 'N/A'}. Incrementing usage.`);
                     if (apiKey) { // Ensure apiKey is not null before incrementing usage
                         const incrementUrl = `https://internal-do/incrementUsage?key=${encodeURIComponent(apiKey)}&model=${encodeURIComponent(modelName.split('/').pop() ?? modelName)}`;
                         ctx.waitUntil(
@@ -93,8 +87,6 @@ export async function handleApiProxy(request: Request, env: Env, ctx: ExecutionC
                                 .then(async (res) => {
                                     if (!res.ok) {
                                         console.error(`[handleApiProxy] Failed incr key cnt ${apiKey.substring(0, 5)}... model ${modelName}: ${await res.text()}`);
-                                    } else {
-                                        console.log(`[handleApiProxy] Key usage incremented for ${apiKey.substring(0, 5)}... model ${modelName}`);
                                     }
                                 })
                                 .catch(err => console.error(`[handleApiProxy] Error calling incrementUsage for key ${apiKey.substring(0, 5)}... model ${modelName}:`, err))

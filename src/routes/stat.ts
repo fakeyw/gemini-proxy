@@ -14,7 +14,6 @@ export async function handleStatRequest(request: Request, env: Env): Promise<Res
         const assetResponse = await env.ASSETS.fetch(statHtmlRequest);
 
         if (!assetResponse.ok) {
-            console.log(`Error fetching stat.html template from ASSETS: Status ${assetResponse.status}`);
             return new Response('Error fetching stat.html template from ASSETS', { status: assetResponse.status });
         }
 

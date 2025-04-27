@@ -66,7 +66,7 @@ export class GeminiHandler implements ApiHandler {
         }
         const upstreamUrl = `${env.GEMINI_UPSTREAM_URL}${pathname}?${params.toString()}`;
 
-        console.log("Gemini real redirect url = ", upstreamUrl);
+        // console.log("Gemini real redirect url = ", upstreamUrl);
 
         const upstreamRequest = new Request(upstreamUrl, {
             method: request.method,

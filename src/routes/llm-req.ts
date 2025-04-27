@@ -38,6 +38,5 @@ export async function handleApiRoute(request: Request, env: Env, ctx: ExecutionC
         return new Response('Invalid API Key.', { status: 401 });
     }
 
-    console.log(`[handleApiRoute] useInternalKeyManager = ${useInternalKeyManager}.`);
     return handleApiProxy(request, env, ctx, useInternalKeyManager, handler, modelName);
 }

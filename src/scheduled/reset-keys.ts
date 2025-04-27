@@ -13,9 +13,7 @@ export async function handleScheduled(controller: ScheduledController, env: Env,
     const managerStub = env.API_KEY_MANAGER.get(doId);
     try {
         const resetResponse = await managerStub.fetch("https://internal-do/reset", { method: "POST" });
-        if (resetResponse.ok) {
-            console.log("API key status reset.");
-        } else {
+        if (!resetResponse.ok) {
             console.error(`Failed to reset API key status (status ${resetResponse.status}): ${await resetResponse.text()}`);
         }
     } catch (err) {

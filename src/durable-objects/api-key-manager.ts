@@ -47,12 +47,9 @@ export class ApiKeyManager {
         } else {
             if (stored?.keys && stored.currentIndex !== undefined) {
                 console.warn("Loaded state format is outdated or invalid. Re-initializing from environment variables.");
-            } else {
-                console.log("No stored state found. Initializing from environment variables.");
             }
 
             const apiKeysString = this.env.API_KEYS;
-            console.log(this.env);
             if (!apiKeysString) {
                 console.error("API_KEYS env not set.");
                 this.keysState = [];
@@ -73,7 +70,6 @@ export class ApiKeyManager {
             currentIndex: this.currentIndex,
         };
         await this.state.storage.put("keyManagerState", stateToStore);
-        console.log(`Saved state: ${this.keysState.length} keys, current index ${this.currentIndex}`);
     }
 
     /**
@@ -205,7 +201,6 @@ export class ApiKeyManager {
             return new Response("Method Not Allowed", { status: 405 });
         }
 
-        console.log("Resetting the exhausted models list for all API keys.");
         this.keysState.forEach(keyData => {
             keyData.exhaustedModels = []; // Reset exhausted models
             keyData.usageCount = {}; // Reset usage count
@@ -265,8 +260,6 @@ export class ApiKeyManager {
         if (request.method !== "GET") {
             return new Response("Method Not Allowed", { status: 405 });
         }
-
-        console.log("Providing all API key usage statistics.");
 
         // Return a structure containing key, usageCount, exhaustedModels, and exhaustedReasons
         const stats = this.keysState.map(keyData => ({
