@@ -1,7 +1,7 @@
 import { Env } from "../types";
 import { ExecutionContext } from "@cloudflare/workers-types";
-import apiManager from "../api-manager";
-import { handleApiProxy } from "./handler";
+import apiManager from "../llm-api-adapter/api-manager";
+import { handleApiProxy } from "../functions/llm-req-handler";
 
 /**
  * Handles routing and preparation for API proxy requests.

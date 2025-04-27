@@ -1,8 +1,8 @@
 import { Env } from "../types";
 import { DurableObjectStub, ExecutionContext } from "@cloudflare/workers-types";
-import { ApiHandler } from "../api-handlers/base";
-import apiManager from "../api-manager"; // apiManager is used inside handleApiProxy
-import { getApiKey, handleUpstream429 } from "./key-helpers"; // These helper functions are used
+import { ApiHandler } from "../llm-api-adapter/base";
+import apiManager from "../llm-api-adapter/api-manager";
+import { getApiKey, handleUpstream429 } from "./key-helpers";
 
 /**
  * Main handler for proxying API requests with key rotation and retries.
@@ -17,11 +17,11 @@ export async function handleApiProxy(request: Request, env: Env, ctx: ExecutionC
     // Note: Handler determination and model name parsing are now expected to be done before calling this function.
     // The handler and modelName are passed as parameters.
 
-    modelName = modelName === null ? "" : modelName; // Use empty string if model name is null
+    modelName = modelName === null ? "" : modelName;
     await console.log(`[handleApiProxy] Determined API Type: ${handler.apiType}, Model Name: ${modelName || 'N/A'}`);
 
     while (retries < maxRetries) {
-        let apiKey: string | null = null; // Initialize apiKey as null
+        let apiKey: string | null = null;
 
         if (useInternalKeyManager) {
             try {
@@ -70,10 +70,8 @@ export async function handleApiProxy(request: Request, env: Env, ctx: ExecutionC
                 if (upstreamResponse.status === 429) {
                     console.log(`[handleApiProxy] Upstream returned 429 for model ${modelName}. Handling exhaustion and retrying.`);
                     if (apiKey) {
-                        // Read the reason from the 429 response body
-                        let reason = "Unknown reason"; // Default reason
+                        let reason = "Unknown reason";
                         try {
-                            // Clone response to read body without consuming it for potential retry logic (though retry logic might change)
                             reason = await upstreamResponse.clone().text();
                         } catch (e) {
                             console.error("Failed to read reason from 429 response body:", e);

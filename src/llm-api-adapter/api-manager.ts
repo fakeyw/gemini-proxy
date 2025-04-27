@@ -1,6 +1,6 @@
-import { ApiHandler } from "./api-handlers/base";
-import { OpenAIHandler } from "./api-handlers/openai";
-import { GeminiHandler } from "./api-handlers/gemini";
+import { ApiHandler } from "./base";
+import { OpenAIHandler } from "./openai";
+import { GeminiHandler } from "./gemini";
 
 /**
  * Manages and provides access to different API handlers based on their type.

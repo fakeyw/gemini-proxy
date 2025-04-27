@@ -2,7 +2,7 @@ import { Env } from "./types";
 import { ExecutionContext } from "@cloudflare/workers-types";
 import { handleHelloRequest } from "./routes/hello";
 import { handleStatRequest, handleModelUsageRequest } from "./routes/stat";
-import { handleApiRoute } from "./proxy/router";
+import { handleApiRoute } from "./routes/llm-req";
 
 /**
  * Main request router for the worker.
